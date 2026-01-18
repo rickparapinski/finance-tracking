@@ -243,45 +243,34 @@ export async function updateTransactionWithForecast(
   if (plan.kind === "pay30") {
     const dueDate = addDaysISO(baseDateISO, 30);
 
-    // Try to reuse existing rule
-    const { data: existing, error: exErr } = await supabase
+    // 1. Create or Update the Rule using Upsert on the unique source_transaction_id
+    const { data: rule, error: rErr } = await supabase
       .from("forecast_rules")
-      .select("id")
-      .eq("source_transaction_id", transactionId)
-      .eq("type", "one_off")
-      .maybeSingle();
-
-    if (exErr) throw new Error(exErr.message);
-
-    let ruleId = existing?.id;
-
-    if (!ruleId) {
-      const { data: created, error: rErr } = await supabase
-        .from("forecast_rules")
-        .insert({
-          source_transaction_id: transactionId, // IMPORTANT
+      .upsert(
+        {
+          source_transaction_id: transactionId,
           name: `Pay in 30 — ${updated.description ?? "Transaction"}`,
           type: "one_off",
           account_id: updated.account_id,
-          category,
-          amount,
+          category: category,
+          amount: amount,
           currency: "EUR",
           start_date: dueDate,
           end_date: dueDate,
           is_active: true,
-        })
-        .select("id")
-        .single();
+        },
+        { onConflict: "source_transaction_id" }, // Requires the SQL constraint above
+      )
+      .select("id")
+      .single();
 
-      if (rErr) throw new Error(rErr.message);
-      ruleId = created.id;
-    }
+    if (rErr) throw new Error(rErr.message);
 
-    // Upsert instance (no duplicates)
+    // 2. Upsert the instance
     const { error: iErr } = await supabase.from("forecast_instances").upsert(
       [
         {
-          rule_id: ruleId,
+          rule_id: rule.id,
           date: dueDate,
           amount,
           status: "projected",
@@ -291,8 +280,6 @@ export async function updateTransactionWithForecast(
       ],
       { onConflict: "rule_id,date" },
     );
-
-    if (iErr) throw new Error(iErr.message);
   }
 
   if (plan.kind === "repeat_monthly") {
