@@ -87,74 +87,105 @@ export default async function ForecastPage({
     (accounts ?? []).reduce((sum, a) => sum + (a.initial_balance ?? 0), 0) +
     (txBefore ?? []).reduce((sum, t) => sum + amountFor(t), 0);
 
-  // Aggregate by month: actual + projected
-  const actualByMonth = new Map<string, number>();
+  // --- NEW LOGIC START ---
+
+  // Helper to safely parse amounts
+  const amountFor = (t: { amount: number; amount_eur: number | null }) =>
+    Number(t.amount_eur ?? t.amount);
+
+  // Helper to build compound keys "YYYY-MM:Category"
+  const catKey = (k: string, c: string) => `${k}:${c || "Uncategorized"}`;
+
+  // 1. Group ACTUALS by "Month:Category"
+  const actualsByCat = new Map<string, number>();
   for (const t of txInYear ?? []) {
     const d = new Date(t.date);
     const k = monthKey(d.getUTCFullYear(), d.getUTCMonth());
-    actualByMonth.set(k, (actualByMonth.get(k) ?? 0) + amountFor(t));
+    const key = catKey(k, t.category);
+    actualsByCat.set(key, (actualsByCat.get(key) ?? 0) + amountFor(t));
   }
 
-  const projectedByMonth = new Map<string, number>();
+  // 2. Group PROJECTIONS by "Month:Category", separating Budgets vs Bills
+  const billsByCat = new Map<string, number>();
+  const budgetsByCat = new Map<string, number>();
+
   for (const f of forecastInstances) {
-    if (f.status !== "projected") continue;
+    if (f.status !== "projected") continue; // Only look at future/unlinked items
+
     const d = new Date(f.date as unknown as string);
-    const k = monthKey(d.getUTCFullYear(), d.getUTCMonth());
-    projectedByMonth.set(k, (projectedByMonth.get(k) ?? 0) + Number(f.amount));
-  }
-  type FcRow = {
-    id: string;
-    rule_id: string;
-    date: string;
-    amount: number;
-    status: "projected" | "realized" | "skipped";
-    note?: string | null;
-    ruleName?: string;
-    category?: string;
-    type?: string;
-  };
-
-  const detailsByMonth = new Map<string, FcRow[]>();
-
-  for (const f of forecastInstances as any[]) {
-    const d = new Date(f.date as string);
     const k = monthKey(d.getUTCFullYear(), d.getUTCMonth());
 
     const rule = ruleById.get(f.rule_id);
-    const item: FcRow = {
-      id: f.id,
-      rule_id: f.rule_id,
-      date: f.date,
-      amount: Number(f.amount),
-      status: f.status,
-      note: f.note ?? null,
-      ruleName: rule?.name ?? "Forecast item",
-      category: rule?.category ?? "Uncategorized",
-      type: rule?.type ?? "",
-    };
+    const cat = rule?.category || "Uncategorized";
+    const key = catKey(k, cat);
+    const amount = Number(f.amount);
 
-    if (!detailsByMonth.has(k)) detailsByMonth.set(k, []);
-    detailsByMonth.get(k)!.push(item);
+    if (rule?.type === "budget") {
+      // If multiple budgets exist for one category (rare), take the "largest" (most negative)
+      // e.g. Min(-500, -600) -> -600
+      const current = budgetsByCat.get(key) ?? 0;
+      budgetsByCat.set(key, Math.min(current, amount));
+    } else {
+      // Regular recurring bills / one-offs just sum up
+      billsByCat.set(key, (billsByCat.get(key) ?? 0) + amount);
+    }
   }
 
-  const detailsObj = Object.fromEntries(detailsByMonth.entries());
-
-  // sort inside each month by date then name
-  for (const [k, arr] of detailsByMonth.entries()) {
-    arr.sort(
-      (a, b) =>
-        a.date.localeCompare(b.date) || a.ruleName!.localeCompare(b.ruleName!),
-    );
-  }
-
-  // Build rows
+  // 3. Calculate Totals per Month with "Consumption Logic"
   let running = openingTotal;
+
   const rows = Array.from({ length: 12 }).map((_, i) => {
     const k = monthKey(year, i);
-    const actual = actualByMonth.get(k) ?? 0;
-    const projected = projectedByMonth.get(k) ?? 0;
+
+    // Find all categories active in this specific month
+    const categories = new Set<string>();
+    const gatherCats = (map: Map<string, number>) => {
+      for (const fullKey of map.keys()) {
+        if (fullKey.startsWith(k + ":")) {
+          categories.add(fullKey.split(":")[1]);
+        }
+      }
+    };
+    gatherCats(actualsByCat);
+    gatherCats(billsByCat);
+    gatherCats(budgetsByCat);
+
+    let monthActual = 0;
+    let monthProjected = 0;
+
+    for (const cat of categories) {
+      const key = catKey(k, cat);
+      const act = actualsByCat.get(key) ?? 0; // Already spent
+      const bill = billsByCat.get(key) ?? 0; // Fixed upcoming bills
+      const bud = budgetsByCat.get(key) ?? 0; // The budget limit
+
+      // LOGIC: The Budget covers both 'Actuals' and 'Fixed Bills'
+      // If Budget is -500. Act is -100. Bill is -50.
+      // We have 'consumed' -150 so far.
+      // We take the "more negative" of (Budget) vs (Consumed).
+
+      const consumed = act + bill;
+      let effectiveTotal = 0;
+
+      if (bud !== 0) {
+        // If it's an Expense Budget (negative), take the lower number (Min)
+        // If it's an Income Target (positive), take the higher number (Max)
+        effectiveTotal =
+          bud < 0 ? Math.min(bud, consumed) : Math.max(bud, consumed);
+      } else {
+        // No budget? Just sum the reality + bills
+        effectiveTotal = consumed;
+      }
+
+      monthActual += act;
+
+      // The "Projected" portion is whatever is left to reach effectiveTotal
+      // e.g. Effective(-500) - Act(-100) = -400 remaining to be spent.
+      monthProjected += effectiveTotal - act;
+    }
+
+    const net = monthActual + monthProjected;
     const opening = running;
-    const net = actual + projected;
     const closing = opening + net;
     running = closing;
 
@@ -164,8 +195,18 @@ export default async function ForecastPage({
       timeZone: "UTC",
     });
 
-    return { key: k, label, opening, actual, projected, net, closing };
+    return {
+      key: k,
+      label,
+      opening,
+      actual: monthActual,
+      projected: monthProjected,
+      net,
+      closing,
+    };
   });
+
+  // --- NEW LOGIC END ---
 
   const fmt = (n: number) =>
     new Intl.NumberFormat("de-DE", {

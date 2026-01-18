@@ -93,7 +93,7 @@ export async function ensureForecastInstances({
       continue;
     }
 
-    if (rule.type === "recurring") {
+    if (rule.type === "recurring" || rule.type === "budget") {
       if (rule.frequency !== "monthly") continue; // v1: monthly only
 
       // Generate from max(rule.start_date, startDate) through horizon
