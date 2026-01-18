@@ -11,6 +11,7 @@ const supabase = createClient(
 async function syncBudgetRule(
   categoryId: string,
   name: string,
+  type: string,
   budget: number,
 ) {
   // 1. If budget is 0 or negative, remove any existing budget rule
@@ -23,27 +24,62 @@ async function syncBudgetRule(
     return;
   }
 
-  // 2. Upsert the Budget Rule
-  // We use a specific ID based on category to prevent duplicates (or rely on category_id)
-  const { error } = await supabase.from("forecast_rules").upsert(
-    {
-      category_id: categoryId, // Strict link
-      name: `Budget: ${name}`,
-      type: "budget", // New type
-      category: name, // String fallback for display
-      amount: budget,
-      currency: "EUR", // Defaulting to EUR for simplicity
-      start_date: new Date().toISOString().slice(0, 10), // Starts now
-      frequency: "monthly",
-      day_of_month: 1, // Budgets usually start on the 1st
-      is_active: true,
-    },
-    { onConflict: "category_id, type" }, // Requires a unique index on (category_id, type) or just manage via ID query
-  );
+  // 2. Logic: Expenses should be negative for the forecast math
+  const finalAmount = type === "expense" ? -Math.abs(budget) : Math.abs(budget);
 
-  // Note: To make the upsert work perfectly, ideally add a UNIQUE index:
-  // CREATE UNIQUE INDEX idx_forecast_budget ON forecast_rules(category_id, type) WHERE type = 'budget';
-  // For now, we can also just Query -> Update/Insert manually if index is missing.
+  // 3. Robust Upsert (Check existence manually)
+  const { data: existing } = await supabase
+    .from("forecast_rules")
+    .select("id")
+    .eq("category_id", categoryId)
+    .eq("type", "budget")
+    .single();
+
+  if (existing) {
+    // UPDATE existing rule (Account ID already exists, so we don't need to touch it)
+    const { error } = await supabase
+      .from("forecast_rules")
+      .update({
+        name: `Budget: ${name}`,
+        category: name,
+        amount: finalAmount,
+        is_active: true,
+      })
+      .eq("id", existing.id);
+
+    if (error) throw new Error(`Failed to update rule: ${error.message}`);
+  } else {
+    // INSERT new rule
+    // FIX: The DB requires an account_id. Since budgets are global,
+    // we pick the first available account to satisfy the constraint.
+    const { data: acc } = await supabase
+      .from("accounts")
+      .select("id")
+      .limit(1)
+      .maybeSingle();
+
+    if (!acc) {
+      throw new Error(
+        "You must have at least one account created to add a budget.",
+      );
+    }
+
+    const { error } = await supabase.from("forecast_rules").insert({
+      account_id: acc.id, // <--- Added this to fix the error
+      category_id: categoryId,
+      name: `Budget: ${name}`,
+      type: "budget",
+      category: name,
+      amount: finalAmount,
+      currency: "EUR",
+      start_date: new Date().toISOString().slice(0, 10),
+      frequency: "monthly",
+      day_of_month: 1,
+      is_active: true,
+    });
+
+    if (error) throw new Error(`Failed to create rule: ${error.message}`);
+  }
 }
 
 export async function createCategory(formData: FormData) {
@@ -64,7 +100,7 @@ export async function createCategory(formData: FormData) {
   if (error) throw new Error(error.message);
 
   // 2. Sync Forecast Rule
-  await syncBudgetRule(data.id, name, budget);
+  await syncBudgetRule(data.id, name, type, budget);
 
   revalidatePath("/categories");
 }
@@ -88,16 +124,19 @@ export async function updateCategory(formData: FormData) {
 
   // Sync Forecast Rule
   if (is_active) {
-    await syncBudgetRule(id, name, budget);
+    await syncBudgetRule(id, name, type, budget);
   } else {
     // If inactive, delete the rule
-    await syncBudgetRule(id, name, 0);
+    await syncBudgetRule(id, name, type, 0);
   }
 
   revalidatePath("/categories");
 }
 
 export async function deleteCategory(id: string) {
+  // Optional: Trigger delete on forecast_rules too if you don't have ON DELETE CASCADE
+  await supabase.from("forecast_rules").delete().eq("category_id", id);
+
   const { error } = await supabase.from("categories").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/categories");

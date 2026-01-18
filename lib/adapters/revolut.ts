@@ -10,17 +10,16 @@ export const parseRevolut = (file: File): Promise<NormalizedTransaction[]> => {
         const transactions: NormalizedTransaction[] = [];
 
         results.data.forEach((row: any) => {
-          // 1. Safety Checks based on your CSV structure
+          // 1. Safety Checks
           if (!row["Started Date"] || !row["Amount"]) return;
 
           // 2. Filter: Only Completed transactions
           if (row["State"] !== "COMPLETED") return;
 
-          // 3. Optional: Skip internal vaults if they appear in your full export
-          // (Your snippet didn't show them, but standard Revolut exports often have Type='VAULT')
+          // 3. Skip internal vaults if needed
           if (row["Type"] === "VAULT") return;
 
-          // 4. Parse Date: "2025-12-01 02:12:07" -> "2025-12-01"
+          // 4. Parse Date
           const datePart = row["Started Date"].split(" ")[0];
 
           // 5. Map fields
@@ -29,7 +28,8 @@ export const parseRevolut = (file: File): Promise<NormalizedTransaction[]> => {
             amount: parseFloat(row["Amount"]),
             description: row["Description"],
             currency: row["Currency"],
-            category: "Uncategorized",
+            // CHANGE THIS LINE:
+            category: "", // Leave empty to allow db-loader to apply your rules
           });
         });
 

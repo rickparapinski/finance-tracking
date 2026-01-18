@@ -310,7 +310,7 @@ export async function updateTransactionWithForecast(
           amount,
           status: "projected",
           transaction_id: null,
-          note: `Created from transaction ${transactionId}`,
+          note: `Created from transaction ${transactionId}`, // Keep for Pay in 30 (Specific link)
         },
       ],
       { onConflict: "rule_id,date" },
@@ -338,7 +338,7 @@ export async function updateTransactionWithForecast(
       const { data: created, error: rErr } = await supabase
         .from("forecast_rules")
         .insert({
-          source_transaction_id: transactionId, // IMPORTANT
+          source_transaction_id: transactionId, // IMPORTANT: We link the Rule to the Source (for lineage)
           name: `Monthly — ${updated.description ?? "Transaction"}`,
           type: "recurring",
           account_id: updated.account_id,
@@ -364,7 +364,7 @@ export async function updateTransactionWithForecast(
       amount,
       status: "projected" as const,
       transaction_id: null,
-      note: `Created from transaction ${transactionId}`,
+      note: null, // <--- FIXED: No "Created from..." note for recurring future items
     }));
 
     // Upsert to avoid duplicates on re-save
