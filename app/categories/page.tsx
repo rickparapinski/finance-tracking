@@ -13,6 +13,7 @@ export default async function CategoriesPage() {
   const { data: categories } = await supabase
     .from("categories")
     .select("*")
+    .order("sort_order", { ascending: true })
     .order("name", { ascending: true });
 
   return (
@@ -34,7 +35,6 @@ export default async function CategoriesPage() {
         </Link>
       </header>
 
-      {/* Pass the data to the client component */}
       <CategoriesClientPage categories={categories as any[]} />
     </main>
   );

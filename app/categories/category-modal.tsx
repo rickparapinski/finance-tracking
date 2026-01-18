@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createCategory, updateCategory, deleteCategory } from "./actions";
+import { createCategory, updateCategory } from "./actions";
 
 // Define the shape of a Category based on your DB
 type Category = {
@@ -27,28 +27,34 @@ export function CategoryModal({
   const [isLoading, setIsLoading] = useState(false);
 
   // Form State
-  const [name, setName] = useState("");
-  const [type, setType] = useState("expense");
-  const [budget, setBudget] = useState("0");
-  const [color, setColor] = useState("");
-  const [isActive, setIsActive] = useState(true);
+  const [form, setForm] = useState({
+    name: "",
+    type: "expense",
+    budget: "",
+    color: "",
+    isActive: true,
+  });
 
-  // Reset or Populate form when modal opens
+  // Initialize form when opening / switching category
   useEffect(() => {
     if (isOpen) {
       if (categoryToEdit) {
-        setName(categoryToEdit.name);
-        setType(categoryToEdit.type);
-        setBudget(String(categoryToEdit.monthly_budget ?? 0));
-        setColor(categoryToEdit.color ?? "");
-        setIsActive(categoryToEdit.is_active);
+        setForm({
+          name: categoryToEdit.name,
+          type: categoryToEdit.type,
+          budget: String(categoryToEdit.monthly_budget ?? ""),
+          color: categoryToEdit.color ?? "",
+          isActive: categoryToEdit.is_active,
+        });
       } else {
         // Reset for "Create New"
-        setName("");
-        setType("expense");
-        setBudget("0");
-        setColor("");
-        setIsActive(true);
+        setForm({
+          name: "",
+          type: "expense",
+          budget: "",
+          color: "",
+          isActive: true,
+        });
       }
     }
   }, [isOpen, categoryToEdit]);
@@ -58,11 +64,11 @@ export function CategoryModal({
     setIsLoading(true);
 
     const formData = new FormData();
-    formData.append("name", name);
-    formData.append("type", type);
-    formData.append("monthly_budget", budget);
-    formData.append("color", color);
-    if (isActive) formData.append("is_active", "on");
+    formData.append("name", form.name);
+    formData.append("type", form.type);
+    formData.append("monthly_budget", form.budget);
+    formData.append("color", form.color);
+    if (form.isActive) formData.append("is_active", "on");
 
     try {
       if (categoryToEdit) {
@@ -71,24 +77,10 @@ export function CategoryModal({
       } else {
         await createCategory(formData);
       }
-      onClose(); // Close on success
+      onClose();
     } catch (error) {
       console.error(error);
       alert("Failed to save category");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!categoryToEdit || !confirm("Are you sure? This cannot be undone."))
-      return;
-    setIsLoading(true);
-    try {
-      await deleteCategory(categoryToEdit.id);
-      onClose();
-    } catch (e) {
-      alert("Error deleting");
     } finally {
       setIsLoading(false);
     }
@@ -122,11 +114,11 @@ export function CategoryModal({
                 Name
               </label>
               <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
                 placeholder="e.g. Groceries"
                 required
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
               />
             </div>
             <div className="col-span-1">
@@ -135,8 +127,8 @@ export function CategoryModal({
               </label>
               <input
                 type="color"
-                value={color || "#94a3b8"}
-                onChange={(e) => setColor(e.target.value)}
+                value={form.color || "#94a3b8"}
+                onChange={(e) => setForm({ ...form, color: e.target.value })}
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white p-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-200"
               />
             </div>
@@ -149,8 +141,8 @@ export function CategoryModal({
                 Type
               </label>
               <select
-                value={type}
-                onChange={(e) => setType(e.target.value)}
+                value={form.type}
+                onChange={(e) => setForm({ ...form, type: e.target.value })}
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
               >
                 <option value="expense">Expense</option>
@@ -162,66 +154,51 @@ export function CategoryModal({
               <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
                 Budget (€)
               </label>
-              <input
-                type="number"
-                value={budget}
-                onChange={(e) => setBudget(e.target.value)}
-                placeholder="0"
-                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-              />
+              <div className="relative">
+                <input
+                  type="number"
+                  value={form.budget}
+                  onChange={(e) => setForm({ ...form, budget: e.target.value })}
+                  placeholder="0"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 text-right"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Active Status (Only for Edit) */}
+          {/* Active Status (Only shown on Edit, similar to how Transaction modal might handle extra options) */}
           {categoryToEdit && (
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="checkbox"
-                id="is_active"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-                className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 h-4 w-4"
-              />
-              <label
-                htmlFor="is_active"
-                className="text-sm text-slate-700 cursor-pointer select-none"
-              >
-                Active Category
+            <div className="pt-2">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.isActive}
+                  onChange={(e) =>
+                    setForm({ ...form, isActive: e.target.checked })
+                  }
+                  className="rounded border-slate-300 text-slate-900 focus:ring-slate-900 h-4 w-4"
+                />
+                <span className="text-sm text-slate-700">Active Category</span>
               </label>
             </div>
           )}
 
           {/* Footer Actions */}
-          <div className="pt-4 flex items-center justify-between gap-2">
-            <div>
-              {categoryToEdit && (
-                <button
-                  type="button"
-                  onClick={handleDelete}
-                  disabled={isLoading}
-                  className="px-3 py-2 text-xs font-medium text-rose-600 hover:bg-rose-50 rounded-xl transition"
-                >
-                  Delete
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100 rounded-md transition"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-white shadow-[var(--shadow-softer)] hover:opacity-90 transition disabled:opacity-60"
-              >
-                {isLoading ? "Saving..." : "Save Changes"}
-              </button>
-            </div>
+          <div className="pt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-100 rounded-md transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-white shadow-[var(--shadow-softer)] hover:opacity-90 transition disabled:opacity-60"
+            >
+              {isLoading ? "Saving..." : "Save Changes"}
+            </button>
           </div>
         </form>
       </div>

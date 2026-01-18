@@ -1,10 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CategoryModal } from "./category-modal";
-import { Button } from "@/components/ui/button";
+import { deleteCategory } from "./actions";
 
-// Re-defining the type here or import from a shared types file
 type Category = {
   id: string;
   name: string;
@@ -12,7 +12,7 @@ type Category = {
   color: string | null;
   is_active: boolean;
   monthly_budget: number | null;
-  sort_order?: number; // Optional if you have it
+  sort_order?: number;
 };
 
 export function CategoriesClientPage({
@@ -33,6 +33,12 @@ export function CategoriesClientPage({
   const handleEdit = (category: Category) => {
     setSelectedCategory(category);
     setIsModalOpen(true);
+  };
+
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation(); // Prevent row click opening modal
+    if (!confirm("Are you sure? This cannot be undone.")) return;
+    await deleteCategory(id);
   };
 
   const fmtCurrency = (n: number) =>
@@ -59,39 +65,45 @@ export function CategoriesClientPage({
             Define your spending buckets and budgets.
           </p>
         </div>
-        <Button
+        <button
           onClick={handleCreate}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white"
+          className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white shadow-[var(--shadow-softer)] hover:opacity-90 transition"
         >
           + New Category
-        </Button>
+        </button>
       </div>
 
       <div className="rounded-[var(--radius)] bg-white shadow-[var(--shadow-softer)] overflow-hidden">
+        {/* Table Header */}
         <div className="bg-slate-50 border-b border-slate-100 px-6 py-3">
           <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-slate-600">
-            <div className="col-span-4">Name</div>
+            <div className="col-span-3">Name</div>
             <div className="col-span-2">Type</div>
             <div className="col-span-2 text-right">Budget</div>
             <div className="col-span-2 text-center">Status</div>
-            <div className="col-span-2 text-right">Action</div>
+            <div className="col-span-2">Rules</div>
+            <div className="col-span-1 text-right">Action</div>
           </div>
         </div>
 
+        {/* Table Body */}
         <div className="divide-y divide-slate-100">
           {categories.map((c) => (
             <div
               key={c.id}
+              onClick={() => handleEdit(c)}
               className="px-6 py-4 hover:bg-slate-50 transition-colors grid grid-cols-12 gap-4 items-center group cursor-pointer"
-              onClick={() => handleEdit(c)} // Clicking row opens edit
             >
               {/* Name */}
-              <div className="col-span-4 flex items-center gap-3">
+              <div className="col-span-3 flex items-center gap-3">
                 <div
                   className="w-3 h-3 rounded-full border border-slate-100 shadow-sm"
                   style={{ backgroundColor: c.color || "#e2e8f0" }}
                 />
-                <span className="text-sm font-medium text-slate-900">
+                <span
+                  className="text-sm font-medium text-slate-900 truncate"
+                  title={c.name}
+                >
                   {c.name}
                 </span>
               </div>
@@ -124,15 +136,27 @@ export function CategoriesClientPage({
                 )}
               </div>
 
-              {/* Edit Button */}
-              <div className="col-span-2 text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 text-slate-500 hover:text-slate-900"
+              {/* Rules Link (Restored) */}
+              <div className="col-span-2">
+                <Link
+                  href={`/categories/${c.id}/rules`}
+                  onClick={(e) => e.stopPropagation()} // Important: stop click from opening Edit Modal
+                  className="text-xs font-medium text-slate-500 hover:text-slate-900 hover:underline flex items-center gap-1"
                 >
-                  Edit
-                </Button>
+                  Manage rules
+                  <span className="text-slate-400">→</span>
+                </Link>
+              </div>
+
+              {/* Actions */}
+              <div className="col-span-1 flex justify-end">
+                <button
+                  onClick={(e) => handleDelete(e, c.id)}
+                  className="rounded-md px-2 py-1 text-xs font-medium text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                  title="Delete Category"
+                >
+                  Del
+                </button>
               </div>
             </div>
           ))}
