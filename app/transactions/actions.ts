@@ -137,7 +137,42 @@ export async function createTransactionLink(args: {
   if (leftId === rightId)
     throw new Error("Cannot link a transaction to itself");
 
-  // Store deterministically to match the UNIQUE index (least/greatest)
+  // 1. Fetch the transactions to check if we need to auto-balance
+  const { data: txs } = await supabase
+    .from("transactions")
+    .select("id, amount, account_id, date, description, accounts(type)")
+    .in("id", [leftId, rightId]);
+
+  if (!txs || txs.length !== 2) throw new Error("Transactions not found");
+
+  const [t1, t2] = txs;
+
+  // 2. SMART LOGIC: Handle "Settlement" of Debt
+  // If both are negative (Expense + Payment), we need a positive Credit to zero out the debt.
+  if (linkType === "settlement" && t1.amount < 0 && t2.amount < 0) {
+    // Heuristic: The transaction with the EARLIER date is usually the Debt (Purchase),
+    // and the LATER date is the Payment.
+    const purchase = t1.date < t2.date ? t1 : t2;
+    const payment = t1.date < t2.date ? t2 : t1;
+
+    // Create the "Credit" entry on the Purchase Account (e.g. Klarna)
+    const { error: insertErr } = await supabase.from("transactions").insert({
+      account_id: purchase.account_id, // Add money back to Klarna
+      date: payment.date, // On the day we paid
+      amount: Math.abs(payment.amount), // The positive version (+49.90)
+      amount_eur: Math.abs(payment.amount), // Simplify currency logic for now
+      description: `Payment Received (Settlement)`,
+      category: "Transfer", // Mark as transfer so it doesn't look like Income
+      is_manual: true,
+      original_currency: "EUR", // Ideally fetch account currency, assuming EUR for now
+    });
+
+    if (insertErr)
+      throw new Error("Failed to create balancing credit transaction");
+  }
+
+  // 3. Create the Link (Standard Logic)
+  // Store deterministically (lowest ID first) to match UNIQUE constraints if you have them
   const [a, b] = [leftId, rightId].sort();
 
   const { error } = await supabase.from("transaction_links").insert({
