@@ -1,13 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { ForecastTable } from "./ForecastTable";
 import { UnmatchedList } from "./UnmatchedList";
-import { AddRuleModal } from "./AddRuleModal"; // Import it
+import { AddRuleModal } from "./AddRuleModal";
 import { generateForecastInstances } from "./actions";
-import {
-  formatCurrency,
-  getCycleStartDate,
-  getCycleKeyForDate,
-} from "@/lib/finance-utils";
+import { getCycleKeyForDate } from "@/lib/finance-utils";
 
 export const revalidate = 0;
 
@@ -24,21 +20,21 @@ export default async function ForecastPage({
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
   );
 
-  // 1. DATES & CYCLES
-  const fetchStart = new Date(Date.UTC(year - 1, 11, 1)).toISOString();
-  const fetchEnd = new Date(Date.UTC(year + 1, 1, 1)).toISOString();
+  // 1. FETCH CONFIG & DATA
+  const fetchStart = new Date(Date.UTC(year - 1, 10, 1)).toISOString(); // Nov prev year
+  const fetchEnd = new Date(Date.UTC(year + 1, 2, 1)).toISOString(); // Mar next year
 
-  // 2. FETCH DATA
   const [
     { data: accounts },
     { data: txBefore },
     { data: txInRange },
     { data: rules },
+    { data: dbCycles },
   ] = await Promise.all([
     supabase.from("accounts").select("*"),
     supabase
       .from("transactions")
-      .select("account_id, amount, amount_eur") //
+      .select("account_id, amount, amount_eur")
       .lt("date", fetchStart),
     supabase
       .from("transactions")
@@ -46,6 +42,7 @@ export default async function ForecastPage({
       .gte("date", fetchStart)
       .lt("date", fetchEnd),
     supabase.from("forecast_rules").select("*").eq("is_active", true),
+    supabase.from("cycles").select("*"),
   ]);
 
   await generateForecastInstances({
@@ -53,7 +50,6 @@ export default async function ForecastPage({
     horizonMonths: 18,
   });
 
-  // Fetch Instances
   const { data: fcInRange } = await supabase
     .from("forecast_instances")
     .select(
@@ -65,34 +61,44 @@ export default async function ForecastPage({
   const forecastInstances = fcInRange ?? [];
   const ruleById = new Map((rules ?? []).map((r) => [r.id, r]));
 
-  // --- 3. CASH FLOW FILTERING ---
-  // We only care about "Assets" (Checking/Savings) for Cash Flow.
-  // Liabilities (Credit Cards, Loans) are excluded from the "Opening Balance".
-  // Their payments (Transfers from Assets) will appear as outflows.
+  // --- 2. CYCLE HELPER (Smart Cycles) ---
+  const getSmartCycleKey = (dateStr: string) => {
+    // Check DB Custom Cycles first
+    const found = dbCycles?.find((c) => {
+      return dateStr >= c.start_date && dateStr <= c.end_date;
+    });
+    if (found) return found.key;
+    // Fallback
+    return getCycleKeyForDate(new Date(dateStr));
+  };
 
+  // --- 3. FILTERING ---
   const assetAccounts = (accounts ?? []).filter((a) => a.nature === "asset");
   const assetAccountIds = new Set(assetAccounts.map((a) => a.id));
 
-  // Filter Data Sources
+  // A. Actuals: Only count transactions on Asset accounts (Money actually leaving/entering bank)
   const relevantTxBefore = (txBefore ?? []).filter((t) =>
     assetAccountIds.has(t.account_id),
   );
   const relevantTxInRange = (txInRange ?? []).filter((t) =>
     assetAccountIds.has(t.account_id),
   );
+
+  // B. Forecast: Allow ALL rules (Asset OR Liability).
+  //    This ensures BNPL/Credit Card projected payments show up as "Upcoming Expenses".
   const relevantForecastInstances = forecastInstances.filter((f) => {
     const rule = ruleById.get(f.rule_id);
-    return rule && assetAccountIds.has(rule.account_id);
+    return !!rule; // <--- CHANGED: Removed assetAccountIds check to show Klarna items
   });
 
-  // --- 4. UNMATCHED TRANSACTIONS LOGIC ---
+  // --- 4. UNMATCHED LIST ---
   const linkedTxIds = new Set(
     relevantForecastInstances.map((f) => f.transaction_id).filter(Boolean),
   );
 
   const unmatchedTransactions = relevantTxInRange
     .filter((t) => !linkedTxIds.has(t.id))
-    .filter((t) => t.date >= `${year}-01-01`)
+    .filter((t) => t.date >= `${year}-01-01` && t.date <= `${year}-12-31`)
     .map((t) => ({
       id: t.id,
       date: t.date,
@@ -112,18 +118,18 @@ export default async function ForecastPage({
       category: ruleById.get(f.rule_id)?.category,
     }));
 
-  // --- CALCULATION LOGIC ---
+  // --- 5. AGGREGATION ---
   const amountFor = (t: any) => Number(t.amount_eur ?? t.amount);
   const catKey = (k: string, c: string) => `${k}:${c || "Uncategorized"}`;
 
-  // Opening Balance: Sum of Asset Initial Balances + Asset Transactions before range
+  // Opening Balance (Asset Accounts only)
   let runningBalance =
     assetAccounts.reduce((sum, a) => sum + (a.initial_balance ?? 0), 0) +
     relevantTxBefore.reduce((sum, t) => sum + amountFor(t), 0);
 
   const actualsByCat = new Map<string, number>();
   for (const t of relevantTxInRange) {
-    const k = getCycleKeyForDate(new Date(t.date));
+    const k = getSmartCycleKey(t.date);
     const key = catKey(k, t.category);
     actualsByCat.set(key, (actualsByCat.get(key) ?? 0) + amountFor(t));
   }
@@ -131,7 +137,9 @@ export default async function ForecastPage({
   const billsByCat = new Map<string, number>();
   for (const f of relevantForecastInstances) {
     if (f.status !== "projected") continue;
-    const k = getCycleKeyForDate(new Date(f.date));
+
+    // Use the Smart Cycle key so BNPL items fall into the correct custom period
+    const k = getSmartCycleKey(f.date);
     const rule = ruleById.get(f.rule_id);
     const key = catKey(k, rule?.category || "Uncategorized");
     const val = Number(f.override_amount ?? f.amount);
@@ -179,7 +187,7 @@ export default async function ForecastPage({
 
   const detailsByMonth: Record<string, any[]> = {};
   for (const f of relevantForecastInstances) {
-    const k = getCycleKeyForDate(new Date(f.date));
+    const k = getSmartCycleKey(f.date);
     if (!k.startsWith(`${year}-`)) continue;
 
     if (!detailsByMonth[k]) detailsByMonth[k] = [];
@@ -202,7 +210,7 @@ export default async function ForecastPage({
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Forecast</h1>
           <p className="text-sm text-slate-600">
-            Cash Flow View (Assets Only).
+            Cash Flow View (Assets + Projected Liabilities).
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -211,7 +219,7 @@ export default async function ForecastPage({
               accounts?.find((a) => a.name.includes("Revolut Main"))?.id
             }
           />
-          <div className="h-6 w-px bg-slate-200 mx-2" /> {/* Separator */}
+          <div className="h-6 w-px bg-slate-200 mx-2" />
           <a
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition"
             href={`/forecast?year=${year - 1}`}

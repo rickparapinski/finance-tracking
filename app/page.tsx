@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { getCurrentCycle, formatCurrency } from "@/lib/finance-utils";
+import { fetchCurrentCycle, formatCurrency } from "@/lib/finance-utils";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpRight, ArrowDownRight, Wallet } from "lucide-react";
@@ -10,14 +10,14 @@ import { cn } from "@/lib/utils";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
 );
 
 // Ensure fresh data
 export const revalidate = 0;
 
 export default async function Dashboard() {
-  const { start, end } = getCurrentCycle();
+  const { start, end } = await fetchCurrentCycle();
 
   // 1. Fetch Accounts
   const { data: accounts } = await supabase
@@ -73,7 +73,7 @@ export default async function Dashboard() {
 
   const netResult = totalIncome - totalExpense;
   const sortedCategories = Object.entries(categoryTotals).sort(
-    ([, a], [, b]) => b - a
+    ([, a], [, b]) => b - a,
   );
 
   // --- TOP ROW CARD DATA (for the 3 widgets) ---
@@ -188,7 +188,7 @@ function StatCard({
             "text-2xl font-bold",
             type === "expense" && "text-red-600",
             type === "income" && "text-emerald-600",
-            type === "neutral" && "text-zinc-900 dark:text-zinc-50"
+            type === "neutral" && "text-zinc-900 dark:text-zinc-50",
           )}
         >
           {formatCurrency(value)}

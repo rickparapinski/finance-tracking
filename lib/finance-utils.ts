@@ -1,4 +1,5 @@
 // lib/finance-utils.ts
+import { createClient } from "@supabase/supabase-js"; // <--- THIS WAS MISSING
 
 // --- 1. DATE & CYCLE LOGIC ---
 
@@ -19,7 +20,6 @@ export function getNextWorkingDay(date: Date): Date {
  * - December: 19th (or next working day) - Special user rule
  */
 export function getCycleStartDate(year: number, monthIndex: number): Date {
-  // Handle month rollover (e.g. month 12 -> Jan next year) if necessary
   const d = new Date(Date.UTC(year, monthIndex, 1));
   const y = d.getUTCFullYear();
   const m = d.getUTCMonth();
@@ -33,51 +33,23 @@ export function getCycleStartDate(year: number, monthIndex: number): Date {
 
 /**
  * Determines which "Cycle Month" a specific date belongs to.
- * Returns a key like "2026-01" for the cycle that COVERS January expenses.
- * (Usually starts Dec 25th of previous year).
  */
 export function getCycleKeyForDate(dateObj: Date): string {
   const y = dateObj.getUTCFullYear();
   const m = dateObj.getUTCMonth();
 
-  // Calculate the start of the cycle for THIS month
   const startOfThisMonthCycle = getCycleStartDate(y, m);
 
   if (dateObj >= startOfThisMonthCycle) {
-    // If we passed the 25th, we are in NEXT month's cycle
-    // e.g. Jan 26 is part of "Feb" cycle
     const d = new Date(Date.UTC(y, m + 1, 1));
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
   } else {
-    // We are before the 25th, so we are still in THIS month's cycle
-    // (Wait, actually usually:
-    //  Dec 25 -> Jan 24 is the "Jan" cycle.
-    //  Jan 10 is inside "Jan" cycle.
-    //  So if date < Jan 25, we are in Jan cycle?
-    //  Let's trace:
-    //  Cycle Starts Dec 25.
-    //  Date Jan 10.
-    //  Start(Jan) = Jan 25.
-    //  Jan 10 < Jan 25. So it belongs to... "Jan" cycle?
-    //  Yes.
-    //  Date Jan 26.
-    //  Jan 26 >= Jan 25. It belongs to "Feb" cycle.
-
-    // So:
-    // If date < Start(ThisMonth), it is This Month Cycle.
-    // If date >= Start(ThisMonth), it is Next Month Cycle.
-
-    // Example: Jan 10. Start(Jan) = Jan 25. 10 < 25 -> Key "2026-01". Correct.
-    // Example: Jan 26. Start(Jan) = Jan 25. 26 >= 25 -> Key "2026-02". Correct.
-
     return `${y}-${String(m + 1).padStart(2, "0")}`;
   }
 }
 
 export function getCurrentCycle() {
   const now = new Date();
-
-  // Find which cycle we are in right now
   const y = now.getFullYear();
   const m = now.getMonth();
 
@@ -87,16 +59,13 @@ export function getCurrentCycle() {
   let end: Date;
 
   if (now >= startOfThis) {
-    // We are in the "Next Month" cycle
     start = startOfThis;
     const startOfNext = getCycleStartDate(y, m + 1);
     end = new Date(startOfNext);
     end.setDate(end.getDate() - 1);
   } else {
-    // We are in "This Month" cycle (which started last month)
     const startOfPrev = getCycleStartDate(y, m - 1);
     start = startOfPrev;
-
     end = new Date(startOfThis);
     end.setDate(end.getDate() - 1);
   }
@@ -105,6 +74,49 @@ export function getCurrentCycle() {
   end.setHours(23, 59, 59, 999);
 
   return { start, end };
+}
+
+// --- NEW: ASYNC CYCLE FETCHING (DB AWARE) ---
+
+export async function fetchCurrentCycle() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  );
+
+  const now = new Date();
+
+  // 1. Get the "Default" calculated cycle to find the Key
+  const defaultCycle = getCurrentCycle();
+  const cycleKey = getCycleKeyForDate(now);
+
+  // 2. Try to find a custom override in DB
+  const { data: customCycle } = await supabase
+    .from("cycles")
+    .select("*")
+    .eq("key", cycleKey)
+    .single();
+
+  if (customCycle) {
+    const start = new Date(customCycle.start_date);
+    const end = new Date(customCycle.end_date);
+
+    // Ensure hours are set for comparison safety
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    return {
+      start,
+      end,
+      key: cycleKey,
+    };
+  }
+
+  // 3. Fallback to default calculation
+  return {
+    ...defaultCycle,
+    key: cycleKey,
+  };
 }
 
 // --- 2. CURRENCY LOGIC ---
