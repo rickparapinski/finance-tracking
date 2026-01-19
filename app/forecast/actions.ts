@@ -109,18 +109,31 @@ export async function updateForecastInstanceAmount(
 }
 
 // --- 4. GENERATION (Preserve existing Manual Edits) ---
-// (Refining your existing ensureForecastInstances to be safer)
 
-function addMonthsClamped(dateISO: string, monthsToAdd: number) {
-  // ... (Keep your existing date logic here)
-  // Re-use your existing helper
-  const d = new Date(dateISO);
-  d.setMonth(d.getMonth() + monthsToAdd);
+function toISODateOnly(d: Date) {
   return d.toISOString().slice(0, 10);
 }
 
+function addMonthsClamped(dateISO: string, monthsToAdd: number) {
+  const d = new Date(dateISO);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth();
+  const day = d.getUTCDate();
+
+  const targetMonthIndex = month + monthsToAdd;
+  const targetYear = year + Math.floor(targetMonthIndex / 12);
+  const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
+
+  const lastDay = new Date(
+    Date.UTC(targetYear, targetMonth + 1, 0),
+  ).getUTCDate();
+  const clampedDay = Math.min(day, lastDay);
+
+  return toISODateOnly(new Date(Date.UTC(targetYear, targetMonth, clampedDay)));
+}
+
 export async function generateForecastInstances({
-  startDate, // usually "today"
+  startDate,
   horizonMonths = 12,
 }: {
   startDate: string;
@@ -136,40 +149,51 @@ export async function generateForecastInstances({
   const inserts: any[] = [];
 
   for (const rule of rules) {
-    // Generate dates based on rule type
-    // ... (Your existing logic for one_off, recurring, installment)
-    // Let's assume we generated a list of dates: ['2026-02-01', '2026-03-01']
+    const dates: string[] = [];
+    const start = rule.start_date;
 
-    // PSEUDO CODE for brevity:
-    const dates = []; // calculate dates based on rule
-    if (rule.type === "recurring") {
-      for (let i = 0; i < horizonMonths; i++)
-        dates.push(addMonthsClamped(rule.start_date, i));
+    // 1. One-off Rule
+    if (rule.type === "one_off") {
+      dates.push(start);
+    }
+    // 2. Installment Rule
+    else if (rule.type === "installment" && rule.installments_count) {
+      for (let i = 0; i < rule.installments_count; i++) {
+        dates.push(addMonthsClamped(start, i));
+      }
+    }
+    // 3. Recurring Rule (Monthly)
+    else if (rule.type === "recurring" || rule.type === "budget") {
+      // Generate for the requested horizon
+      for (let i = 0; i < horizonMonths; i++) {
+        dates.push(addMonthsClamped(start, i));
+      }
     }
 
+    // Filter dates to ensure we only insert relevant ones (future/present)
+    // and stop if rule has an end_date
     for (const date of dates) {
-      if (date < startDate) continue; // Don't backfill past
+      if (date < startDate) continue;
+      if (rule.end_date && date > rule.end_date) continue;
 
       inserts.push({
         rule_id: rule.id,
         date: date,
-        amount: rule.amount, // Default from rule
+        amount: rule.amount,
         status: "projected",
       });
     }
   }
 
-  // UPSERT is key here.
-  // We DO NOT want to overwrite "Realized" or "Manual Edits"
-  // So we only insert if it doesn't exist.
   if (inserts.length > 0) {
     const { error } = await supabase
       .from("forecast_instances")
       .upsert(inserts, {
         onConflict: "rule_id,date",
-        ignoreDuplicates: true, // <--- CRITICAL: Preserves your manual "Play" edits
+        ignoreDuplicates: true, // Preserves manual edits/links
       });
 
-    if (error) console.error(error);
+    if (error) console.error("Error generating instances:", error);
   }
 }
+// Add this to the bottom of the file

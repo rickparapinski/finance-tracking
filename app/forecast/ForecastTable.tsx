@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { updateForecastInstanceAmount } from "./actions"; // ensure this exists
-import { formatCurrency } from "@/lib/utils"; // or local helper
+import { formatCurrency } from "@/lib/finance-utils"; // or local helper
 
 type MonthRow = {
   key: string;
