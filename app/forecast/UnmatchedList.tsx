@@ -1,9 +1,20 @@
-// app/forecast/UnmatchedList.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { Search, Link as LinkIcon, Calendar } from "lucide-react";
+import { format } from "date-fns";
 import { formatCurrency } from "@/lib/finance-utils";
 import { linkTransactionToForecast } from "./actions";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
 
 type Transaction = {
   id: string;
@@ -30,6 +41,7 @@ export function UnmatchedList({
 }) {
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null);
   const [isLinking, setIsLinking] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const handleLink = async (instanceId: string) => {
     if (!selectedTx) return;
@@ -37,6 +49,7 @@ export function UnmatchedList({
     try {
       await linkTransactionToForecast(selectedTx.id, instanceId);
       setSelectedTx(null); // Close modal on success
+      setSearchTerm(""); // Reset search
     } catch (e) {
       console.error(e);
       alert("Failed to link");
@@ -45,168 +58,205 @@ export function UnmatchedList({
     }
   };
 
+  // --- Grouping & Filtering Logic ---
+  const groupedInstances = useMemo(() => {
+    if (!selectedTx) return {};
+
+    // 1. Filter by Search
+    const lowerSearch = searchTerm.toLowerCase();
+    const filtered = projectedInstances.filter((item) => {
+      if (!lowerSearch) return true;
+      return (
+        item.ruleName?.toLowerCase().includes(lowerSearch) ||
+        item.category?.toLowerCase().includes(lowerSearch)
+      );
+    });
+
+    // 2. Group by Month (Key: "2026-01")
+    const groups: Record<string, ForecastItem[]> = {};
+    filtered.forEach((item) => {
+      // Use just YYYY-MM for sorting/grouping key
+      const monthKey = item.date.substring(0, 7);
+      if (!groups[monthKey]) groups[monthKey] = [];
+      groups[monthKey].push(item);
+    });
+
+    // 3. Sort items within groups? (Optional, maybe by amount or name)
+    // Currently staying with default order (usually date/creation)
+
+    return groups;
+  }, [projectedInstances, selectedTx, searchTerm]);
+
+  // Sort group keys chronologicaly
+  const sortedGroupKeys = Object.keys(groupedInstances).sort();
+
   if (transactions.length === 0) return null;
 
   return (
     <>
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-6 animate-in slide-in-from-top-4">
-        <h3 className="text-sm font-semibold text-amber-900 mb-3 flex items-center gap-2">
-          <span className="flex size-2 rounded-full bg-amber-500 animate-pulse" />
-          Unmatched Transactions ({transactions.length})
-        </h3>
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-6 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+            <LinkIcon size={18} />
+          </div>
+          <div>
+            <h3 className="font-semibold text-amber-900">
+              Unmatched Transactions
+            </h3>
+            <p className="text-sm text-amber-700/80">
+              {transactions.length} items need to be linked to a budget.
+            </p>
+          </div>
+        </div>
 
-        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-amber-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {transactions.map((tx) => (
-            <button
+            <div
               key={tx.id}
-              onClick={() => setSelectedTx(tx)}
-              className="flex-shrink-0 flex flex-col items-start gap-1 p-3 rounded-lg bg-white border border-amber-100 shadow-sm hover:shadow-md transition text-left min-w-[160px] group"
+              className="group flex flex-col justify-between p-3 rounded-xl border border-amber-200/60 bg-white hover:border-amber-300 hover:shadow-sm transition-all"
             >
-              <span className="text-xs text-slate-400 font-mono">
-                {tx.date.slice(5)}
-              </span>
-              <span className="text-sm font-medium text-slate-700 truncate w-full group-hover:text-amber-700 transition-colors">
-                {tx.description}
-              </span>
-              <span
-                className={`text-sm font-mono font-semibold ${
-                  tx.amount < 0 ? "text-slate-900" : "text-emerald-600"
-                }`}
+              <div className="mb-2">
+                <div className="flex justify-between items-start gap-2">
+                  <div
+                    className="font-medium text-slate-900 line-clamp-1 text-sm"
+                    title={tx.description}
+                  >
+                    {tx.description}
+                  </div>
+                  <span className="font-mono font-bold text-slate-900 text-sm whitespace-nowrap">
+                    {formatCurrency(tx.amount)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-1">
+                  <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-medium">
+                    {format(new Date(tx.date), "dd MMM")}
+                  </span>
+                  <span className="truncate max-w-[120px]">{tx.category}</span>
+                </div>
+              </div>
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs h-8 border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
+                onClick={() => setSelectedTx(tx)}
               >
-                {formatCurrency(tx.amount)}
-              </span>
-              <span className="text-[10px] text-amber-600 font-medium bg-amber-50 px-1.5 py-0.5 rounded-md border border-amber-100 mt-1">
-                Link to Plan
-              </span>
-            </button>
+                Link to Budget
+              </Button>
+            </div>
           ))}
         </div>
       </div>
 
-      {/* Shared Modal Instance */}
-      <LinkTransactionModal
-        transaction={selectedTx}
-        isOpen={!!selectedTx}
-        onClose={() => setSelectedTx(null)}
-        projectedInstances={projectedInstances}
-        onLink={handleLink}
-        isLinking={isLinking}
-      />
-    </>
-  );
-}
-
-// --- Sub-Component: Matches edit-modal.tsx styles exactly ---
-
-function LinkTransactionModal({
-  transaction,
-  isOpen,
-  onClose,
-  projectedInstances,
-  onLink,
-  isLinking,
-}: {
-  transaction: Transaction | null;
-  isOpen: boolean;
-  onClose: () => void;
-  projectedInstances: ForecastItem[];
-  onLink: (id: string) => void;
-  isLinking: boolean;
-}) {
-  if (!isOpen || !transaction) return null;
-
-  // Filter instances logic
-  const sortedInstances = [...projectedInstances].sort((a, b) => {
-    const dateA = new Date(a.date).getTime();
-    const dateB = new Date(b.date).getTime();
-    const target = new Date(transaction.date).getTime();
-    return Math.abs(dateA - target) - Math.abs(dateB - target);
-  });
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white rounded-[var(--radius)] shadow-[var(--shadow-soft)] w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 flex-shrink-0">
-          <h2 className="text-base font-semibold text-slate-900">
-            Link to Plan
-          </h2>
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="grid size-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
-          >
-            ✕
-          </button>
-        </div>
-
-        {/* Content */}
-        <div className="p-6 overflow-y-auto min-h-0">
-          {/* Selected Transaction Summary */}
-          <div className="p-4 bg-slate-50 rounded-xl mb-6 border border-slate-100">
-            <div className="text-xs font-bold text-slate-400 uppercase mb-2">
-              Selected Transaction
-            </div>
-            <div className="font-medium text-slate-900 text-lg leading-tight mb-1">
-              {transaction.description}
-            </div>
-            <div className="flex justify-between items-center text-sm">
-              <span className="text-slate-500">{transaction.date}</span>
-              <span
-                className={`font-mono font-bold ${
-                  transaction.amount < 0 ? "text-slate-900" : "text-emerald-600"
-                }`}
-              >
-                {formatCurrency(transaction.amount)}
-              </span>
-            </div>
-          </div>
-
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-slate-500 uppercase">
-              Select matching forecast item
-            </h3>
-
-            <div className="space-y-2">
-              {sortedInstances.map((inst) => (
-                <button
-                  key={inst.id}
-                  onClick={() => onLink(inst.id)}
-                  disabled={isLinking}
-                  className="w-full flex items-center justify-between p-3 rounded-xl border border-slate-200 hover:border-blue-500 hover:bg-blue-50/50 hover:shadow-sm transition group text-left"
-                >
-                  <div className="min-w-0 pr-4">
-                    <div className="text-sm font-semibold text-slate-900 group-hover:text-blue-700 truncate">
-                      {inst.ruleName || "Forecast Item"}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      {inst.date} <span className="text-slate-300 mx-1">|</span>{" "}
-                      {inst.category}
-                    </div>
-                  </div>
-                  <div className="text-right flex-shrink-0">
-                    <div className="font-mono text-sm font-semibold text-slate-700">
-                      {formatCurrency(inst.amount)}
-                    </div>
-                    {/* Diff indicator */}
-                    <div className="text-[10px] text-slate-400 mt-0.5">
-                      Δ {formatCurrency(inst.amount - transaction.amount)}
-                    </div>
-                  </div>
-                </button>
-              ))}
-
-              {sortedInstances.length === 0 && (
-                <div className="text-center py-8 rounded-xl border border-dashed border-slate-200 bg-slate-50/50">
-                  <p className="text-sm text-slate-500">
-                    No projected items found nearby.
-                  </p>
+      {/* --- LINKING DIALOG --- */}
+      <Dialog
+        open={!!selectedTx}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSelectedTx(null);
+            setSearchTerm("");
+          }
+        }}
+      >
+        <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
+          <DialogHeader className="p-4 pb-2 border-b border-slate-100">
+            <DialogTitle className="text-base font-semibold text-slate-900 flex flex-col gap-1">
+              <span>Link Transaction</span>
+              {selectedTx && (
+                <div className="flex items-center justify-between text-sm font-normal text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
+                  <span className="truncate mr-2">
+                    {selectedTx.description}
+                  </span>
+                  <span className="font-mono font-bold text-slate-700 whitespace-nowrap">
+                    {formatCurrency(selectedTx.amount)}
+                  </span>
                 </div>
               )}
+            </DialogTitle>
+          </DialogHeader>
+
+          {/* Search Bar */}
+          <div className="p-4 pb-2 pt-2 bg-white">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Search budgets (e.g. Groceries)..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 bg-slate-50 border-slate-200 focus-visible:ring-amber-500"
+              />
             </div>
           </div>
-        </div>
-      </div>
-    </div>
+
+          {/* Grouped List */}
+          <div className="flex-1 overflow-y-auto p-4 pt-0 space-y-6">
+            {sortedGroupKeys.length === 0 ? (
+              <div className="text-center py-10 text-slate-400 text-sm">
+                No matching budgets found.
+              </div>
+            ) : (
+              sortedGroupKeys.map((monthKey) => {
+                const groupItems = groupedInstances[monthKey];
+                // Format Header: "2026-01" -> "January 2026"
+                const [y, m] = monthKey.split("-");
+                const dateObj = new Date(parseInt(y), parseInt(m) - 1);
+                const label = format(dateObj, "MMMM yyyy");
+
+                return (
+                  <div key={monthKey} className="space-y-2">
+                    <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm py-2 border-b border-slate-100 flex items-center gap-2">
+                      <Badge
+                        variant="secondary"
+                        className="bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      >
+                        <Calendar className="w-3 h-3 mr-1" />
+                        {label}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-2">
+                      {groupItems.map((inst) => (
+                        <button
+                          key={inst.id}
+                          disabled={isLinking}
+                          onClick={() => handleLink(inst.id)}
+                          className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-white hover:border-amber-400 hover:bg-amber-50/30 transition-all group text-left shadow-sm"
+                        >
+                          <div className="min-w-0 pr-4">
+                            <div className="text-sm font-semibold text-slate-900 group-hover:text-amber-800 truncate">
+                              {inst.ruleName || "Forecast Item"}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                              <span>
+                                {format(new Date(inst.date), "dd MMM")}
+                              </span>
+                              <span className="text-slate-300">|</span>
+                              <span>{inst.category || "Uncategorized"}</span>
+                            </div>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <div className="font-mono text-sm font-bold text-slate-700">
+                              {formatCurrency(inst.amount)}
+                            </div>
+                            {selectedTx && (
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                Left:{" "}
+                                {formatCurrency(
+                                  inst.amount - selectedTx.amount,
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

@@ -1,15 +1,14 @@
-// lib/finance-utils.ts
-import { createClient } from "@supabase/supabase-js"; // <--- THIS WAS MISSING
+import { createClient } from "@supabase/supabase-js";
 
 // --- 1. DATE & CYCLE LOGIC ---
 
 export function getNextWorkingDay(date: Date): Date {
-  const day = date.getDay(); // 0 = Sun, 6 = Sat
+  const day = date.getUTCDay(); // <--- CHANGED from getDay() to getUTCDay()
   const newDate = new Date(date);
 
   if (day === 6)
-    newDate.setDate(date.getDate() + 2); // Sat -> Mon
-  else if (day === 0) newDate.setDate(date.getDate() + 1); // Sun -> Mon
+    newDate.setUTCDate(date.getUTCDate() + 2); // Sat -> Mon
+  else if (day === 0) newDate.setUTCDate(date.getUTCDate() + 1); // Sun -> Mon
 
   return newDate;
 }
@@ -41,18 +40,23 @@ export function getCycleKeyForDate(dateObj: Date): string {
   const startOfThisMonthCycle = getCycleStartDate(y, m);
 
   if (dateObj >= startOfThisMonthCycle) {
+    // If date is AFTER the start, it belongs to NEXT month's cycle
+    // e.g. Oct 26 >= Oct 26 -> Nov Cycle
     const d = new Date(Date.UTC(y, m + 1, 1));
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
   } else {
+    // If date is BEFORE the start, it belongs to THIS month's cycle
+    // e.g. Oct 20 < Oct 26 -> Oct Cycle
     return `${y}-${String(m + 1).padStart(2, "0")}`;
   }
 }
 
 export function getCurrentCycle() {
   const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
 
+  // Use UTC cycle checks for current status too
   const startOfThis = getCycleStartDate(y, m);
 
   let start: Date;
@@ -62,16 +66,17 @@ export function getCurrentCycle() {
     start = startOfThis;
     const startOfNext = getCycleStartDate(y, m + 1);
     end = new Date(startOfNext);
-    end.setDate(end.getDate() - 1);
+    end.setUTCDate(end.getUTCDate() - 1);
   } else {
     const startOfPrev = getCycleStartDate(y, m - 1);
     start = startOfPrev;
     end = new Date(startOfThis);
-    end.setDate(end.getDate() - 1);
+    end.setUTCDate(end.getUTCDate() - 1);
   }
 
-  start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
+  // Set times to boundary for comparisons
+  start.setUTCHours(0, 0, 0, 0);
+  end.setUTCHours(23, 59, 59, 999);
 
   return { start, end };
 }
@@ -86,11 +91,9 @@ export async function fetchCurrentCycle() {
 
   const now = new Date();
 
-  // 1. Get the "Default" calculated cycle to find the Key
   const defaultCycle = getCurrentCycle();
   const cycleKey = getCycleKeyForDate(now);
 
-  // 2. Try to find a custom override in DB
   const { data: customCycle } = await supabase
     .from("cycles")
     .select("*")
@@ -101,9 +104,8 @@ export async function fetchCurrentCycle() {
     const start = new Date(customCycle.start_date);
     const end = new Date(customCycle.end_date);
 
-    // Ensure hours are set for comparison safety
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
+    start.setUTCHours(0, 0, 0, 0);
+    end.setUTCHours(23, 59, 59, 999);
 
     return {
       start,
@@ -112,7 +114,6 @@ export async function fetchCurrentCycle() {
     };
   }
 
-  // 3. Fallback to default calculation
   return {
     ...defaultCycle,
     key: cycleKey,
