@@ -1,9 +1,10 @@
+// lib/finance-utils.ts
 import { createClient } from "@supabase/supabase-js";
 
 // --- 1. DATE & CYCLE LOGIC ---
 
 export function getNextWorkingDay(date: Date): Date {
-  const day = date.getUTCDay(); // <--- CHANGED from getDay() to getUTCDay()
+  const day = date.getUTCDay();
   const newDate = new Date(date);
 
   if (day === 6)
@@ -14,9 +15,9 @@ export function getNextWorkingDay(date: Date): Date {
 }
 
 /**
- * Returns the official START date of a cycle for a given Year/Month.
- * - Standard: 25th (or next working day)
- * - December: 19th (or next working day) - Special user rule
+ * STANDARD (Default) Rule:
+ * - Starts 25th of previous month.
+ * - Dec Exception: Starts 19th.
  */
 export function getCycleStartDate(year: number, monthIndex: number): Date {
   const d = new Date(Date.UTC(year, monthIndex, 1));
@@ -31,7 +32,7 @@ export function getCycleStartDate(year: number, monthIndex: number): Date {
 }
 
 /**
- * Determines which "Cycle Month" a specific date belongs to.
+ * STANDARD (Default) Key Calculation
  */
 export function getCycleKeyForDate(dateObj: Date): string {
   const y = dateObj.getUTCFullYear();
@@ -40,23 +41,34 @@ export function getCycleKeyForDate(dateObj: Date): string {
   const startOfThisMonthCycle = getCycleStartDate(y, m);
 
   if (dateObj >= startOfThisMonthCycle) {
-    // If date is AFTER the start, it belongs to NEXT month's cycle
-    // e.g. Oct 26 >= Oct 26 -> Nov Cycle
     const d = new Date(Date.UTC(y, m + 1, 1));
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
   } else {
-    // If date is BEFORE the start, it belongs to THIS month's cycle
-    // e.g. Oct 20 < Oct 26 -> Oct Cycle
     return `${y}-${String(m + 1).padStart(2, "0")}`;
   }
+}
+
+/**
+ * NEW: SMART Key Calculation (Checks Custom Cycles First)
+ */
+export function getSmartCycleKey(dateObj: Date, customCycles: any[]): string {
+  const dateStr = dateObj.toISOString().split("T")[0];
+
+  // 1. Check if date falls inside a known custom cycle
+  const match = customCycles?.find((c) => {
+    return dateStr >= c.start_date && dateStr <= c.end_date;
+  });
+
+  if (match) return match.key;
+
+  // 2. Fallback to standard
+  return getCycleKeyForDate(dateObj);
 }
 
 export function getCurrentCycle() {
   const now = new Date();
   const y = now.getUTCFullYear();
   const m = now.getUTCMonth();
-
-  // Use UTC cycle checks for current status too
   const startOfThis = getCycleStartDate(y, m);
 
   let start: Date;
@@ -74,14 +86,13 @@ export function getCurrentCycle() {
     end.setUTCDate(end.getUTCDate() - 1);
   }
 
-  // Set times to boundary for comparisons
   start.setUTCHours(0, 0, 0, 0);
   end.setUTCHours(23, 59, 59, 999);
 
   return { start, end };
 }
 
-// --- NEW: ASYNC CYCLE FETCHING (DB AWARE) ---
+// --- UPDATED: DB-AWARE FETCH ---
 
 export async function fetchCurrentCycle() {
   const supabase = createClient(
@@ -90,34 +101,30 @@ export async function fetchCurrentCycle() {
   );
 
   const now = new Date();
+  const nowStr = now.toISOString().split("T")[0];
 
-  const defaultCycle = getCurrentCycle();
-  const cycleKey = getCycleKeyForDate(now);
-
-  const { data: customCycle } = await supabase
+  // 1. Try to find a custom cycle that explicitly contains "today"
+  const { data: activeCycle } = await supabase
     .from("cycles")
     .select("*")
-    .eq("key", cycleKey)
-    .single();
+    .lte("start_date", nowStr)
+    .gte("end_date", nowStr)
+    .maybeSingle();
 
-  if (customCycle) {
-    const start = new Date(customCycle.start_date);
-    const end = new Date(customCycle.end_date);
-
+  if (activeCycle) {
+    const start = new Date(activeCycle.start_date);
+    const end = new Date(activeCycle.end_date);
     start.setUTCHours(0, 0, 0, 0);
     end.setUTCHours(23, 59, 59, 999);
 
-    return {
-      start,
-      end,
-      key: cycleKey,
-    };
+    return { start, end, key: activeCycle.key };
   }
 
-  return {
-    ...defaultCycle,
-    key: cycleKey,
-  };
+  // 2. Fallback to default
+  const defaultCycle = getCurrentCycle();
+  const cycleKey = getCycleKeyForDate(now);
+
+  return { ...defaultCycle, key: cycleKey };
 }
 
 // --- 2. CURRENCY LOGIC ---

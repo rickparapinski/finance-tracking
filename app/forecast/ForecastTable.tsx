@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Fragment } from "react"; // <--- 1. Import Fragment
 import { updateForecastInstanceAmount } from "./actions";
 import { formatCurrency } from "@/lib/finance-utils";
 import { clsx } from "clsx";
+
+// ... (keep types and helper functions exactly as they are) ...
 
 type MonthRow = {
   key: string;
@@ -29,6 +31,7 @@ type FcItem = {
 };
 
 function groupItems(items: FcItem[]) {
+  // ... (keep logic) ...
   const groups = new Map<string, FcItem[]>();
   const singles: FcItem[] = [];
 
@@ -103,6 +106,7 @@ export function ForecastTable({
   };
 
   const EditableAmount = ({ item }: { item: FcItem }) => {
+    // ... (keep EditableAmount logic) ...
     const [val, setVal] = useState(String(item.amount));
     if (item.status === "realized" || item.transaction_id) {
       return (
@@ -142,6 +146,7 @@ export function ForecastTable({
   };
 
   const BudgetProgressRow = ({ items }: { items: FcItem[] }) => {
+    // ... (keep BudgetProgressRow logic) ...
     const first = items[0];
 
     const totalRealized = items
@@ -155,11 +160,8 @@ export function ForecastTable({
     const totalBudget = totalRealized + totalProjected;
     const isExpense = totalBudget < 0;
 
-    // Calculate percentage based on absolute values to handle negative budgets correctly
     const absRealized = Math.abs(totalRealized);
     const absBudget = Math.abs(totalBudget);
-
-    // Avoid division by zero
     const spentPct =
       absBudget === 0 ? 0 : Math.min(100, (absRealized / absBudget) * 100);
 
@@ -171,7 +173,6 @@ export function ForecastTable({
         <td className="px-3 py-3 align-middle border-b border-slate-50">
           <div className="flex flex-col gap-2">
             <div className="flex justify-between items-center">
-              {/* 1. CLEANER: Removed the redundant gray category label */}
               <div className="font-medium text-slate-800 text-sm">
                 {first.ruleName}
               </div>
@@ -194,7 +195,6 @@ export function ForecastTable({
                   {formatCurrency(totalRealized)}
                 </span>
               </span>
-              {/* Optional: You can remove this 'Left' line if you prefer, since it's now on the right */}
             </div>
           </div>
         </td>
@@ -204,7 +204,6 @@ export function ForecastTable({
           </span>
         </td>
         <td className="px-3 py-3 text-right align-middle font-mono font-bold text-slate-700 border-b border-slate-50">
-          {/* 2. ACTIONABLE: Showing what is LEFT (Projected) instead of total */}
           {formatCurrency(totalProjected)}
         </td>
       </tr>
@@ -236,9 +235,10 @@ export function ForecastTable({
             ).length;
 
             return (
-              <>
+              /* 2. Changed <> to <Fragment key={...}> */
+              <Fragment key={r.key}>
                 <tr
-                  key={r.key}
+                  /* 3. Removed key={r.key} from here, moved to Fragment above */
                   onClick={() =>
                     setOpenMonth((m) => (m === r.key ? null : r.key))
                   }
@@ -342,7 +342,7 @@ export function ForecastTable({
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             );
           })}
         </tbody>
