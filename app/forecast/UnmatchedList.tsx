@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Search, Link as LinkIcon, Calendar } from "lucide-react";
+import { Search, Link as LinkIcon, Calendar, CheckCircle2 } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/finance-utils";
 import { linkTransactionToForecast } from "./actions";
@@ -11,10 +11,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from "@/components/ui/carousel";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
+import { Card, CardContent } from "@/components/ui/card";
 
 type Transaction = {
   id: string;
@@ -48,8 +55,8 @@ export function UnmatchedList({
     setIsLinking(true);
     try {
       await linkTransactionToForecast(selectedTx.id, instanceId);
-      setSelectedTx(null); // Close modal on success
-      setSearchTerm(""); // Reset search
+      setSelectedTx(null);
+      setSearchTerm("");
     } catch (e) {
       console.error(e);
       alert("Failed to link");
@@ -58,13 +65,20 @@ export function UnmatchedList({
     }
   };
 
-  // --- Grouping & Filtering Logic ---
+  // Grouping Logic (Same as before)
   const groupedInstances = useMemo(() => {
     if (!selectedTx) return {};
-
-    // 1. Filter by Search
     const lowerSearch = searchTerm.toLowerCase();
-    const filtered = projectedInstances.filter((item) => {
+
+    // Sort by Date (Closest to transaction date first)
+    const sortedProjected = [...projectedInstances].sort((a, b) => {
+      const dateA = new Date(a.date).getTime();
+      const dateB = new Date(b.date).getTime();
+      const txDate = new Date(selectedTx.date).getTime();
+      return Math.abs(txDate - dateA) - Math.abs(txDate - dateB);
+    });
+
+    const filtered = sortedProjected.filter((item) => {
       if (!lowerSearch) return true;
       return (
         item.ruleName?.toLowerCase().includes(lowerSearch) ||
@@ -72,83 +86,85 @@ export function UnmatchedList({
       );
     });
 
-    // 2. Group by Month (Key: "2026-01")
     const groups: Record<string, ForecastItem[]> = {};
     filtered.forEach((item) => {
-      // Use just YYYY-MM for sorting/grouping key
       const monthKey = item.date.substring(0, 7);
       if (!groups[monthKey]) groups[monthKey] = [];
       groups[monthKey].push(item);
     });
-
-    // 3. Sort items within groups? (Optional, maybe by amount or name)
-    // Currently staying with default order (usually date/creation)
-
     return groups;
   }, [projectedInstances, selectedTx, searchTerm]);
 
-  // Sort group keys chronologicaly
   const sortedGroupKeys = Object.keys(groupedInstances).sort();
 
-  if (transactions.length === 0) return null;
+  if (transactions.length === 0) {
+    return (
+      <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 flex items-center gap-3 text-emerald-800">
+        <CheckCircle2 className="h-5 w-5" />
+        <span className="text-sm font-medium">
+          All transactions are linked!
+        </span>
+      </div>
+    );
+  }
 
   return (
     <>
-      <div className="rounded-2xl border border-amber-200 bg-amber-50/50 p-6 space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
-            <LinkIcon size={18} />
+      <div className="w-full max-w-xl mx-auto mb-8">
+        <div className="flex items-center gap-2 mb-4 px-1">
+          <div className="h-6 w-6 rounded-full bg-amber-100 flex items-center justify-center text-amber-600">
+            <LinkIcon size={12} />
           </div>
-          <div>
-            <h3 className="font-semibold text-amber-900">
-              Unmatched Transactions
-            </h3>
-            <p className="text-sm text-amber-700/80">
-              {transactions.length} items need to be linked to a budget.
-            </p>
-          </div>
+          <h3 className="text-sm font-semibold text-slate-700">
+            Link Transactions ({transactions.length})
+          </h3>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {transactions.map((tx) => (
-            <div
-              key={tx.id}
-              className="group flex flex-col justify-between p-3 rounded-xl border border-amber-200/60 bg-white hover:border-amber-300 hover:shadow-sm transition-all"
-            >
-              <div className="mb-2">
-                <div className="flex justify-between items-start gap-2">
-                  <div
-                    className="font-medium text-slate-900 line-clamp-1 text-sm"
-                    title={tx.description}
-                  >
-                    {tx.description}
-                  </div>
-                  <span className="font-mono font-bold text-slate-900 text-sm whitespace-nowrap">
-                    {formatCurrency(tx.amount)}
-                  </span>
+        <Carousel className="w-full">
+          <CarouselContent>
+            {transactions.map((tx) => (
+              <CarouselItem key={tx.id} className="md:basis-1/2 lg:basis-1/2">
+                <div className="p-1">
+                  <Card className="border-amber-200/60 shadow-sm hover:shadow-md transition-all">
+                    <CardContent className="flex flex-col justify-between p-4 h-[160px]">
+                      <div>
+                        <div className="flex justify-between items-start gap-2 mb-1">
+                          <span className="bg-slate-100 px-1.5 py-0.5 rounded text-[10px] text-slate-500 font-mono">
+                            {format(new Date(tx.date), "dd MMM")}
+                          </span>
+                          <span className="font-mono font-bold text-slate-900 text-sm">
+                            {formatCurrency(tx.amount)}
+                          </span>
+                        </div>
+                        <div
+                          className="font-medium text-slate-900 line-clamp-2 text-sm leading-snug mb-2"
+                          title={tx.description}
+                        >
+                          {tx.description}
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate">
+                          {tx.category || "Uncategorized"}
+                        </div>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="w-full mt-3 bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200 shadow-none"
+                        onClick={() => setSelectedTx(tx)}
+                      >
+                        Link to Budget
+                      </Button>
+                    </CardContent>
+                  </Card>
                 </div>
-                <div className="flex items-center gap-2 text-[11px] text-slate-500 mt-1">
-                  <span className="bg-slate-100 px-1.5 py-0.5 rounded text-slate-600 font-medium">
-                    {format(new Date(tx.date), "dd MMM")}
-                  </span>
-                  <span className="truncate max-w-[120px]">{tx.category}</span>
-                </div>
-              </div>
-
-              <Button
-                size="sm"
-                variant="outline"
-                className="w-full text-xs h-8 border-amber-200 text-amber-700 hover:bg-amber-50 hover:text-amber-800"
-                onClick={() => setSelectedTx(tx)}
-              >
-                Link to Budget
-              </Button>
-            </div>
-          ))}
-        </div>
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+          <CarouselPrevious />
+          <CarouselNext />
+        </Carousel>
       </div>
 
-      {/* --- LINKING DIALOG --- */}
+      {/* --- LINKING DIALOG (Same logic as before, cleaner styling) --- */}
       <Dialog
         open={!!selectedTx}
         onOpenChange={(open) => {
@@ -159,100 +175,90 @@ export function UnmatchedList({
         }}
       >
         <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden">
-          <DialogHeader className="p-4 pb-2 border-b border-slate-100">
-            <DialogTitle className="text-base font-semibold text-slate-900 flex flex-col gap-1">
-              <span>Link Transaction</span>
-              {selectedTx && (
-                <div className="flex items-center justify-between text-sm font-normal text-slate-500 bg-slate-50 p-2 rounded-lg border border-slate-100 mt-1">
-                  <span className="truncate mr-2">
-                    {selectedTx.description}
-                  </span>
-                  <span className="font-mono font-bold text-slate-700 whitespace-nowrap">
-                    {formatCurrency(selectedTx.amount)}
-                  </span>
-                </div>
-              )}
+          <DialogHeader className="p-4 pb-2 border-b border-slate-100 bg-slate-50/50">
+            <DialogTitle className="text-base font-semibold text-slate-900">
+              Link to Budget
             </DialogTitle>
+            {selectedTx && (
+              <div className="flex items-center justify-between text-xs text-slate-500 mt-2">
+                <span className="truncate mr-2 font-medium">
+                  {selectedTx.description}
+                </span>
+                <span className="font-mono font-bold text-slate-700">
+                  {formatCurrency(selectedTx.amount)}
+                </span>
+              </div>
+            )}
           </DialogHeader>
 
-          {/* Search Bar */}
-          <div className="p-4 pb-2 pt-2 bg-white">
+          <div className="p-3 border-b border-slate-100">
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
               <Input
-                placeholder="Search budgets (e.g. Groceries)..."
+                placeholder="Search budgets..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 bg-slate-50 border-slate-200 focus-visible:ring-amber-500"
+                className="pl-9 h-9 text-sm bg-slate-50"
+                autoFocus
               />
             </div>
           </div>
 
-          {/* Grouped List */}
-          <div className="flex-1 overflow-y-auto p-4 pt-0 space-y-6">
+          <div className="flex-1 overflow-y-auto p-0">
             {sortedGroupKeys.length === 0 ? (
-              <div className="text-center py-10 text-slate-400 text-sm">
-                No matching budgets found.
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400 space-y-2">
+                <Calendar className="h-8 w-8 opacity-20" />
+                <span className="text-xs">No matching budgets found.</span>
               </div>
             ) : (
-              sortedGroupKeys.map((monthKey) => {
-                const groupItems = groupedInstances[monthKey];
-                // Format Header: "2026-01" -> "January 2026"
-                const [y, m] = monthKey.split("-");
-                const dateObj = new Date(parseInt(y), parseInt(m) - 1);
-                const label = format(dateObj, "MMMM yyyy");
+              <div className="p-4 space-y-6">
+                {sortedGroupKeys.map((monthKey) => {
+                  const groupItems = groupedInstances[monthKey];
+                  const [y, m] = monthKey.split("-");
+                  const dateObj = new Date(parseInt(y), parseInt(m) - 1);
+                  const label = format(dateObj, "MMMM yyyy");
 
-                return (
-                  <div key={monthKey} className="space-y-2">
-                    <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm py-2 border-b border-slate-100 flex items-center gap-2">
-                      <Badge
-                        variant="secondary"
-                        className="bg-slate-100 text-slate-600 hover:bg-slate-200"
-                      >
-                        <Calendar className="w-3 h-3 mr-1" />
-                        {label}
-                      </Badge>
-                    </div>
-
-                    <div className="grid grid-cols-1 gap-2">
-                      {groupItems.map((inst) => (
-                        <button
-                          key={inst.id}
-                          disabled={isLinking}
-                          onClick={() => handleLink(inst.id)}
-                          className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-white hover:border-amber-400 hover:bg-amber-50/30 transition-all group text-left shadow-sm"
+                  return (
+                    <div key={monthKey} className="space-y-2">
+                      <div className="sticky top-0 z-10 bg-white/95 backdrop-blur-sm py-1 flex items-center gap-2">
+                        <Badge
+                          variant="outline"
+                          className="font-normal text-slate-500 bg-slate-50"
                         >
-                          <div className="min-w-0 pr-4">
-                            <div className="text-sm font-semibold text-slate-900 group-hover:text-amber-800 truncate">
-                              {inst.ruleName || "Forecast Item"}
-                            </div>
-                            <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                              <span>
-                                {format(new Date(inst.date), "dd MMM")}
-                              </span>
-                              <span className="text-slate-300">|</span>
-                              <span>{inst.category || "Uncategorized"}</span>
-                            </div>
-                          </div>
-                          <div className="text-right flex-shrink-0">
-                            <div className="font-mono text-sm font-bold text-slate-700">
-                              {formatCurrency(inst.amount)}
-                            </div>
-                            {selectedTx && (
-                              <div className="text-[10px] text-slate-400 mt-0.5">
-                                Left:{" "}
-                                {formatCurrency(
-                                  inst.amount - selectedTx.amount,
-                                )}
+                          {label}
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-1 gap-2">
+                        {groupItems.map((inst) => (
+                          <button
+                            key={inst.id}
+                            disabled={isLinking}
+                            onClick={() => handleLink(inst.id)}
+                            className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-white hover:border-blue-400 hover:bg-blue-50/30 transition-all group text-left shadow-sm active:scale-[0.98]"
+                          >
+                            <div className="min-w-0 pr-4">
+                              <div className="text-sm font-medium text-slate-700 group-hover:text-blue-700 truncate">
+                                {inst.ruleName}
                               </div>
-                            )}
-                          </div>
-                        </button>
-                      ))}
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                {inst.category || "Uncategorized"}
+                              </div>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <div className="font-mono text-sm font-semibold text-slate-700">
+                                {formatCurrency(inst.amount)}
+                              </div>
+                              <div className="text-[10px] text-slate-400 mt-0.5">
+                                Left
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                );
-              })
+                  );
+                })}
+              </div>
             )}
           </div>
         </DialogContent>

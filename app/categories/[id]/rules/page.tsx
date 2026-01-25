@@ -68,7 +68,7 @@ export default async function CategoryRulesPage({
             </label>
             <input
               name="pattern"
-              placeholder="wolt"
+              placeholder="e.g. wolt"
               className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
               required
             />
@@ -84,6 +84,19 @@ export default async function CategoryRulesPage({
               defaultValue={100}
               className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
             />
+          </div>
+
+          {/* NEW CHECKBOX */}
+          <div className="flex items-center h-10 pb-1">
+            <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                name="apply_existing"
+                defaultChecked
+                className="accent-emerald-500 w-4 h-4"
+              />
+              Apply to existing uncategorized
+            </label>
           </div>
 
           <button className="h-10 rounded-xl bg-emerald-500 px-4 text-sm font-medium text-white shadow-[var(--shadow-softer)] hover:opacity-90 transition">

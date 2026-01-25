@@ -16,11 +16,25 @@ async function syncBudgetRule(
 ) {
   // 1. If budget is 0 or negative, remove any existing budget rule
   if (!budget || budget <= 0) {
-    await supabase
+    // First, find the rule ID so we can clean up instances (if no CASCADE on DB)
+    const { data: existing } = await supabase
       .from("forecast_rules")
-      .delete()
+      .select("id")
       .eq("category_id", categoryId)
-      .eq("type", "budget");
+      .eq("type", "budget")
+      .single();
+
+    if (existing) {
+      // Optional: Clean up projected instances explicitly
+      await supabase
+        .from("forecast_instances")
+        .delete()
+        .eq("rule_id", existing.id)
+        .eq("status", "projected");
+
+      // Delete the rule
+      await supabase.from("forecast_rules").delete().eq("id", existing.id);
+    }
     return;
   }
 
@@ -36,7 +50,7 @@ async function syncBudgetRule(
     .single();
 
   if (existing) {
-    // UPDATE existing rule (Account ID already exists, so we don't need to touch it)
+    // A) UPDATE existing rule
     const { error } = await supabase
       .from("forecast_rules")
       .update({
@@ -48,10 +62,17 @@ async function syncBudgetRule(
       .eq("id", existing.id);
 
     if (error) throw new Error(`Failed to update rule: ${error.message}`);
+
+    // --- FIX START: Propagate change to future instances ---
+    // We only update "projected" items. "realized" (paid) items should stay as they were.
+    await supabase
+      .from("forecast_instances")
+      .update({ amount: finalAmount })
+      .eq("rule_id", existing.id)
+      .eq("status", "projected");
+    // --- FIX END ---
   } else {
-    // INSERT new rule
-    // FIX: The DB requires an account_id. Since budgets are global,
-    // we pick the first available account to satisfy the constraint.
+    // B) INSERT new rule
     const { data: acc } = await supabase
       .from("accounts")
       .select("id")
@@ -64,21 +85,30 @@ async function syncBudgetRule(
       );
     }
 
-    const { error } = await supabase.from("forecast_rules").insert({
-      account_id: acc.id, // <--- Added this to fix the error
-      category_id: categoryId,
-      name: `Budget: ${name}`,
-      type: "budget",
-      category: name,
-      amount: finalAmount,
-      currency: "EUR",
-      start_date: new Date().toISOString().slice(0, 10),
-      frequency: "monthly",
-      day_of_month: 1,
-      is_active: true,
-    });
+    // Insert the rule
+    const { data: newRule, error } = await supabase
+      .from("forecast_rules")
+      .insert({
+        account_id: acc.id,
+        category_id: categoryId,
+        name: `Budget: ${name}`,
+        type: "budget",
+        category: name,
+        amount: finalAmount,
+        currency: "EUR",
+        start_date: new Date().toISOString().slice(0, 10),
+        frequency: "monthly",
+        day_of_month: 1,
+        is_active: true,
+      })
+      .select("id")
+      .single();
 
     if (error) throw new Error(`Failed to create rule: ${error.message}`);
+
+    // Trigger generation immediately so the user sees it without refreshing twice
+    // (You'll need to export generateForecastInstances from app/forecast/actions.ts or reimplement basic loop here)
+    // For now, simple revalidation usually handles it if the Forecast page calls generate on load.
   }
 }
 
@@ -122,11 +152,9 @@ export async function updateCategory(formData: FormData) {
 
   if (error) throw new Error(error.message);
 
-  // Sync Forecast Rule
   if (is_active) {
     await syncBudgetRule(id, name, type, budget);
   } else {
-    // If inactive, delete the rule
     await syncBudgetRule(id, name, type, 0);
   }
 

@@ -7,6 +7,21 @@ import { getCycleKeyForDate } from "@/lib/finance-utils";
 
 export const revalidate = 0;
 
+// --- Helper to determine Cycle Key with DB Overrides ---
+function getSmartCycleKey(dateObj: Date, customCycles: any[]) {
+  const dateStr = dateObj.toISOString().split("T")[0];
+
+  // 1. Check if this date falls inside any CUSTOM cycle range
+  const match = customCycles?.find((c) => {
+    return dateStr >= c.start_date && dateStr <= c.end_date;
+  });
+
+  if (match) return match.key; // e.g. "2026-02"
+
+  // 2. Fallback to standard math (25th/19th rule)
+  return getCycleKeyForDate(dateObj);
+}
+
 export default async function ForecastPage({
   searchParams,
 }: {
@@ -21,37 +36,33 @@ export default async function ForecastPage({
   );
 
   // 1. FETCH CONFIG & DATA
-  const fetchStart = new Date(Date.UTC(year - 1, 10, 1)).toISOString(); // Nov prev year
-  const fetchEnd = new Date(Date.UTC(year + 1, 2, 1)).toISOString(); // Mar next year
+  const fetchStart = new Date(Date.UTC(year - 1, 10, 1)).toISOString();
+  const fetchEnd = new Date(Date.UTC(year + 1, 2, 1)).toISOString();
 
   const [
     { data: accounts },
     { data: txInRange },
     { data: rules },
-    { data: dbCycles },
+    { data: dbCycles }, // <--- WE USE THIS NOW
   ] = await Promise.all([
     supabase.from("accounts").select("*"),
-    // Fetch transactions
     supabase
       .from("transactions")
-      .select("account_id, amount, date, description, category, id")
+      .select("account_id, amount, amount_eur, date, description, category, id")
       .gte("date", fetchStart)
       .lt("date", fetchEnd)
       .order("date", { ascending: true }),
-    // Fetch active rules
     supabase.from("forecast_rules").select("*").eq("is_active", true),
-    // Fetch custom cycles
     supabase.from("cycles").select("*"),
   ]);
 
   // 2. GENERATE / REFRESH FORECAST
-  // (We just call this to ensure DB is populated; the view below reads from DB)
   await generateForecastInstances({
     startDate: `${year}-01-01`,
     horizonMonths: 12,
   });
 
-  // 3. FETCH FORECAST INSTANCES (The Source of Truth)
+  // 3. FETCH FORECAST INSTANCES
   const { data: fcInRange } = await supabase
     .from("forecast_instances")
     .select("*")
@@ -62,115 +73,161 @@ export default async function ForecastPage({
   const ruleById = new Map<string, any>();
   rules?.forEach((r) => ruleById.set(r.id, r));
 
+  // --- AGGREGATE ACTUALS (With Custom Cycle Support) ---
+  const budgetActuals = new Map<string, number>();
+  const budgetCategories = new Set(
+    rules?.filter((r) => r.type === "budget").map((r) => r.category),
+  );
+
+  const getBudgetKey = (cycleKey: string, category: string) =>
+    `${cycleKey}|${category}`;
+
+  txInRange?.forEach((tx) => {
+    if (tx.category && budgetCategories.has(tx.category)) {
+      // FIX: Use the smart helper that checks DB cycles
+      const cycleKey = getSmartCycleKey(new Date(tx.date), dbCycles || []);
+
+      const key = getBudgetKey(cycleKey, tx.category);
+      const val = tx.amount_eur ?? tx.amount;
+      budgetActuals.set(key, (budgetActuals.get(key) || 0) + val);
+    }
+  });
+
   // A. Filter Forecast Instances
   const relevantForecastInstances =
-    fcInRange?.filter((f) => {
-      // Exclude skipped
-      if (f.status === "skipped") return false;
-      return true;
-    }) ?? [];
+    fcInRange?.filter((f) => f.status !== "skipped") ?? [];
 
   // B. Identify Unmatched Transactions
-  // A transaction is "unmatched" if no forecast_instance points to its ID
   const linkedTxIds = new Set(
     fcInRange?.filter((f) => f.transaction_id).map((f) => f.transaction_id),
   );
 
   const unmatchedTx =
     txInRange?.filter((tx) => {
-      // Filter out internal transfers or non-relevant accounts if needed
-      if (!linkedTxIds.has(tx.id)) return true;
-      return false;
+      if (linkedTxIds.has(tx.id)) return false;
+      if (tx.category && budgetCategories.has(tx.category)) return false;
+      return true;
     }) ?? [];
 
-  // --- NEW: Enrich Data for UnmatchedList ---
-  // The component needs rule names and categories, not just IDs.
+  // Enrich Data for UnmatchedList
   const enrichedProjected = relevantForecastInstances
-    .filter((f) => f.status === "projected") // Only show projected items as options
+    .filter((f) => f.status === "projected")
     .map((f) => {
       const rule = ruleById.get(f.rule_id);
       return {
         id: f.id,
         date: f.date,
         amount: Number(f.override_amount ?? f.amount),
-        ruleName: rule?.name, // <--- Added
-        category: rule?.category, // <--- Added
+        ruleName: rule?.name,
+        category: rule?.category,
       };
     });
 
   // C. Group Details for the Table View
   const detailsByMonth: Record<string, any[]> = {};
+
   for (const f of relevantForecastInstances) {
-    const k = getCycleKeyForDate(new Date(f.date)); // Use the new Smart Date Logic
+    // FIX: Also use smart cycle key for the forecast rows themselves
+    // (Ensure a forecast instance on Jan 20th lands in the right visual bucket)
+    const k = getSmartCycleKey(new Date(f.date), dbCycles || []);
 
-    // Filter strictly for the requested year's display rows
     if (!k.startsWith(`${year}-`)) continue;
-
     if (!detailsByMonth[k]) detailsByMonth[k] = [];
 
     const rule = ruleById.get(f.rule_id);
+    const ruleType = rule?.type;
+    const category = rule?.category;
 
-    detailsByMonth[k].push({
-      id: f.id,
-      date: f.date,
-      amount: Number(f.override_amount ?? f.amount),
-      status: f.status,
-      ruleId: f.rule_id,
-      ruleType: rule?.type,
-      ruleName: rule?.name,
-      category: rule?.category,
-      note: f.note,
-      transaction_id: f.transaction_id,
-    });
+    let amount = Number(f.override_amount ?? f.amount);
+    let status = f.status;
+
+    // --- Budget Logic Override ---
+    let budgetRealized = 0;
+    let isBudget = false;
+
+    if (ruleType === "budget" && category) {
+      isBudget = true;
+      const budgetKey = getBudgetKey(k, category);
+      budgetRealized = budgetActuals.get(budgetKey) || 0;
+
+      // Calculate remaining budget
+      const remaining = amount - budgetRealized;
+      if (amount < 0) {
+        amount = Math.min(0, remaining);
+      } else {
+        amount = Math.max(0, remaining);
+      }
+    }
+
+    if (isBudget) {
+      if (budgetRealized !== 0) {
+        detailsByMonth[k].push({
+          id: `${f.id}-actual`,
+          date: f.date,
+          amount: budgetRealized,
+          status: "realized",
+          ruleId: f.rule_id,
+          ruleType: "budget",
+          ruleName: rule?.name,
+          category: category,
+          isAggregated: true,
+        });
+      }
+      if (amount !== 0) {
+        detailsByMonth[k].push({
+          id: f.id,
+          date: f.date,
+          amount: amount,
+          status: "projected",
+          ruleId: f.rule_id,
+          ruleType: "budget",
+          ruleName: rule?.name,
+          category: category,
+        });
+      }
+    } else {
+      detailsByMonth[k].push({
+        id: f.id,
+        date: f.date,
+        amount,
+        status,
+        ruleId: f.rule_id,
+        ruleType: ruleType,
+        ruleName: rule?.name,
+        category: category,
+        note: f.note,
+        transaction_id: f.transaction_id,
+      });
+    }
   }
 
-  // D. Build Table Rows (Month by Month)
+  // D. Build Table Rows
   const months = Array.from({ length: 12 }, (_, i) => i);
   const tableRows = months.map((monthIndex) => {
-    const cycleYear = year;
     const cycleMonthStr = String(monthIndex + 1).padStart(2, "0");
-    const key = `${cycleYear}-${cycleMonthStr}`;
-    const label = new Date(cycleYear, monthIndex).toLocaleString("en-US", {
+    const key = `${year}-${cycleMonthStr}`;
+    const label = new Date(year, monthIndex).toLocaleString("en-US", {
       month: "short",
       year: "numeric",
     });
 
     const items = detailsByMonth[key] ?? [];
 
-    // Calculate Totals
-    // 1. Opening: (Ideally calculated from previous month closing, simplified here or requires global calc)
-    // For now, let's assume 0 or passed from previous iteration if we did a full reduce.
-    // *In a real app, you'd calculate running balance from the start of time or a snapshot.*
     const opening = 0;
-
-    // 2. Actuals (Realized Items)
     const actual = items
       .filter((i) => i.status === "realized")
       .reduce((sum, i) => sum + i.amount, 0);
-
-    // 3. Projected (Remaining Items)
     const projected = items
       .filter((i) => i.status === "projected")
       .reduce((sum, i) => sum + i.amount, 0);
 
     const net = actual + projected;
-    const closing = opening + net; // Needs running total logic to be accurate
+    const closing = opening + net;
 
-    return {
-      key,
-      label,
-      opening,
-      actual,
-      projected,
-      net,
-      closing,
-    };
+    return { key, label, opening, actual, projected, net, closing };
   });
 
-  // *Running Balance Fix*: Calculate correct opening/closing across rows
   let runningBalance = 0;
-  // You might want to fetch the real account balance for the start of the year here
-
   const rowsWithBalance = tableRows.map((row) => {
     const opening = runningBalance;
     const closing = opening + row.net;
@@ -212,13 +269,11 @@ export default async function ForecastPage({
         </div>
       </div>
 
-      {/* Unmatched Transactions Module */}
       <UnmatchedList
         transactions={unmatchedTx as any[]}
         projectedInstances={enrichedProjected}
       />
 
-      {/* Main Forecast Table */}
       <ForecastTable rows={rowsWithBalance} detailsByMonth={detailsByMonth} />
     </div>
   );
