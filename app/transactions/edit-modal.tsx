@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Transaction } from "@/lib/adapters/types";
-import { updateTransactionWithForecast } from "./actions";
+import { updateTransactionWithForecast, createTransferCounterpart } from "./actions";
 
 interface EditModalProps {
   transaction: Transaction | null;
   isOpen: boolean;
   onClose: () => void;
   categories: string[];
+  accounts: { id: string; name: string }[];
 }
 
 type ForecastPlan =
@@ -51,8 +52,11 @@ export function EditModal({
   isOpen,
   onClose,
   categories,
+  accounts,
 }: EditModalProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [transferError, setTransferError] = useState<string | null>(null);
+  const [transferAccountId, setTransferAccountId] = useState<string>("");
 
   const [forecastPlan, setForecastPlan] = useState<ForecastPlan>({
     kind: "none",
@@ -76,6 +80,8 @@ export function EditModal({
       category: (transaction.category ?? "").trim() || "Uncategorized",
     });
     setForecastPlan({ kind: "none" });
+    setTransferAccountId("");
+    setTransferError(null);
     setIsLoading(false);
   }, [transaction?.id, isOpen]);
 
@@ -104,23 +110,30 @@ export function EditModal({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setTransferError(null);
     try {
       await updateTransactionWithForecast(
         transaction.id,
         {
-          // NOTE: if your server action expects account_id too, pass it here.
-          // If you don’t edit account_id in the modal, use transaction.account_id.
-          account_id: (transaction as any).account_id ?? transaction.accountId, // adjust to your Transaction type
+          account_id: (transaction as any).account_id ?? transaction.accountId,
           description: form.description,
           category: form.category,
           amount: Number(form.amount),
-          amount_eur: (transaction as any).amount_eur ?? null, // or compute if you have it
+          amount_eur: (transaction as any).amount_eur ?? null,
           date: form.date,
         },
         forecastPlan,
       );
 
+      if (transferAccountId) {
+        await createTransferCounterpart(transaction.id, transferAccountId);
+      }
+
       onClose();
+    } catch (err: any) {
+      if (transferAccountId && err?.message) {
+        setTransferError(err.message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -213,6 +226,39 @@ export function EditModal({
                   </option>
                 ))}
             </select>
+          </div>
+
+          <div className="pt-2">
+            <label className="block text-xs font-bold text-zinc-500 uppercase mb-2">
+              Transfer
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={transferAccountId}
+                onChange={(e) => {
+                  setTransferAccountId(e.target.value);
+                  setTransferError(null);
+                }}
+                className="h-10 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              >
+                <option value="">No transfer counterpart</option>
+                {accounts
+                  .filter((a) => a.id !== (transaction as any).account_id)
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            {transferAccountId && (
+              <p className="mt-1.5 text-xs text-indigo-600">
+                Will create a mirrored transaction ({Number(form.amount) > 0 ? "-" : "+"}{Math.abs(Number(form.amount)).toFixed(2)}) in the selected account.
+              </p>
+            )}
+            {transferError && (
+              <p className="mt-1.5 text-xs text-rose-600">{transferError}</p>
+            )}
           </div>
 
           <div className="pt-2">

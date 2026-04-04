@@ -52,6 +52,8 @@ export default async function Dashboard() {
   const categoryTotals: Record<string, number> = {};
 
   cycleTransactions.forEach((t) => {
+    if (t.category === "Transfer") return;
+
     const val = Number(t.amount_eur ?? t.amount);
 
     if (val < 0) {

@@ -20,6 +20,7 @@ interface DataTableProps {
   columns: ColumnDef<Transaction>[];
   data: Transaction[];
   categories: string[];
+  accounts: { id: string; name: string }[];
   uncategorizedCount: number;
 }
 
@@ -27,6 +28,7 @@ export function DataTable({
   columns,
   data,
   categories,
+  accounts,
   uncategorizedCount,
 }: DataTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -121,6 +123,7 @@ export function DataTable({
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         categories={categories}
+        accounts={accounts}
       />
 
       <div id="uncategorized" className="space-y-3 py-4">

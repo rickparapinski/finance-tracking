@@ -25,6 +25,8 @@ export default async function AccountDetailPage(props: {
 
   const categories = categoriesRows.map((c: any) => c.name);
 
+  const allAccounts = await sql`SELECT id, name FROM accounts WHERE status = 'active'`;
+
   const uncategorizedCount = transactions.filter(
     (t: any) =>
       !t.category || t.category.trim() === "" || t.category === "Uncategorized",
@@ -135,6 +137,7 @@ export default async function AccountDetailPage(props: {
         columns={columnsForAccount}
         data={transactions as any}
         categories={categories}
+        accounts={allAccounts.map((a: any) => ({ id: a.id, name: a.name }))}
         uncategorizedCount={uncategorizedCount}
       />
     </main>
