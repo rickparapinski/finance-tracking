@@ -1,5 +1,6 @@
 import { sql } from "@/lib/db";
-import { fetchCurrentCycle, formatCurrency } from "@/lib/finance-utils";
+import { formatCurrency } from "@/lib/finance-utils";
+import { fetchCurrentCycle } from "@/lib/fetch-cycle";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpRight, ArrowDownRight, Wallet } from "lucide-react";

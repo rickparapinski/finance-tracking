@@ -1,3 +1,4 @@
+"use server";
 // lib/db-loader.ts
 import { sql } from "@/lib/db";
 import { NormalizedTransaction } from "./adapters/types";
