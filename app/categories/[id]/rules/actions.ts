@@ -1,12 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+import { sql } from "@/lib/db";
 
 export async function createRule(formData: FormData) {
   const categoryId = String(
@@ -15,47 +10,30 @@ export async function createRule(formData: FormData) {
   const pattern = String(formData.get("pattern") || "").trim();
   const priorityRaw = String(formData.get("priority") || "100");
   const priority = Number(priorityRaw);
-  const applyExisting = formData.get("apply_existing") === "on"; // <--- NEW
+  const applyExisting = formData.get("apply_existing") === "on";
 
   if (!categoryId) throw new Error("Missing category_id");
   if (!pattern) throw new Error("Pattern is required");
 
-  // 1. Create the Rule
-  const { error } = await supabase.from("category_rules").insert([
-    {
-      category_id: categoryId,
-      match_type: "contains",
-      pattern,
-      priority: Number.isFinite(priority) ? priority : 100,
-      is_case_sensitive: false,
-      is_active: true,
-    },
-  ]);
+  await sql`
+    INSERT INTO category_rules (category_id, match_type, pattern, priority, is_case_sensitive, is_active)
+    VALUES (${categoryId}, 'contains', ${pattern}, ${Number.isFinite(priority) ? priority : 100}, false, true)
+  `;
 
-  if (error) throw new Error(error.message);
-
-  // 2. (Optional) Apply to existing transactions
   if (applyExisting) {
-    // A) Get the Category Name (since transactions table stores name string)
-    const { data: cat } = await supabase
-      .from("categories")
-      .select("name")
-      .eq("id", categoryId)
-      .single();
+    const [cat] = await sql`SELECT name FROM categories WHERE id = ${categoryId}`;
 
     if (cat?.name) {
-      // B) Update transactions that are "Uncategorized" AND match the pattern
-      // We use ilike for case-insensitive matching
-      await supabase
-        .from("transactions")
-        .update({ category: cat.name })
-        .eq("category", "Uncategorized")
-        .ilike("description", `%${pattern}%`);
+      await sql`
+        UPDATE transactions
+        SET category = ${cat.name}
+        WHERE category = 'Uncategorized' AND description ILIKE ${"%" + pattern + "%"}
+      `;
     }
   }
 
   revalidatePath(`/categories/${categoryId}/rules`);
-  revalidatePath("/transactions"); // Also refresh the transactions list
+  revalidatePath("/transactions");
 }
 
 export async function updateRule(formData: FormData) {
@@ -72,16 +50,11 @@ export async function updateRule(formData: FormData) {
   if (!id) throw new Error("Missing rule id");
   if (!pattern) throw new Error("Pattern is required");
 
-  const { error } = await supabase
-    .from("category_rules")
-    .update({
-      pattern,
-      priority: Number.isFinite(priority) ? priority : 100,
-      is_active,
-    })
-    .eq("id", id);
-
-  if (error) throw new Error(error.message);
+  await sql`
+    UPDATE category_rules
+    SET pattern = ${pattern}, priority = ${Number.isFinite(priority) ? priority : 100}, is_active = ${is_active}
+    WHERE id = ${id}
+  `;
 
   revalidatePath(`/categories/${categoryId}/rules`);
 }
@@ -95,8 +68,7 @@ export async function deleteRule(formData: FormData) {
   if (!categoryId) throw new Error("Missing category_id");
   if (!id) throw new Error("Missing rule id");
 
-  const { error } = await supabase.from("category_rules").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  await sql`DELETE FROM category_rules WHERE id = ${id}`;
 
   revalidatePath(`/categories/${categoryId}/rules`);
 }

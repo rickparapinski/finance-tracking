@@ -1,13 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import Link from "next/link";
 import { DataTable } from "@/app/transactions/data-table";
 import { columnsForAccount } from "./transactions-columns";
 import { createTransaction } from "./actions";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
 
 export const revalidate = 0;
 
@@ -16,26 +11,21 @@ export default async function AccountDetailPage(props: {
 }) {
   const { id: accountId } = await props.params;
 
-  const { data: account } = await supabase
-    .from("accounts")
-    .select("*")
-    .eq("id", accountId)
-    .single();
+  const [account] = await sql`SELECT * FROM accounts WHERE id = ${accountId}`;
 
-  const { data: transactions } = await supabase
-    .from("transactions")
-    .select("*")
-    .eq("account_id", accountId)
-    .order("date", { ascending: false });
+  const transactions = await sql`
+    SELECT * FROM transactions
+    WHERE account_id = ${accountId}
+    ORDER BY date DESC
+  `;
 
-  const { data: categoriesRows } = await supabase
-    .from("categories")
-    .select("id, name")
-    .order("name", { ascending: true });
+  const categoriesRows = await sql`
+    SELECT id, name FROM categories ORDER BY name ASC
+  `;
 
-  const categories = (categoriesRows ?? []).map((c: any) => c.name);
+  const categories = categoriesRows.map((c: any) => c.name);
 
-  const uncategorizedCount = (transactions ?? []).filter(
+  const uncategorizedCount = transactions.filter(
     (t: any) =>
       !t.category || t.category.trim() === "" || t.category === "Uncategorized",
   ).length;
@@ -61,7 +51,6 @@ export default async function AccountDetailPage(props: {
         </p>
       </header>
 
-      {/* QUICK ADD TRANSACTION */}
       <div className="rounded-[var(--radius)] bg-white p-6 shadow-[var(--shadow-softer)]">
         <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Add</h3>
         <form
@@ -142,10 +131,9 @@ export default async function AccountDetailPage(props: {
         </div>
       </div>
 
-      {/* TABLE (includes Edit modal automatically) */}
       <DataTable
         columns={columnsForAccount}
-        data={(transactions ?? []) as any}
+        data={transactions as any}
         categories={categories}
         uncategorizedCount={uncategorizedCount}
       />

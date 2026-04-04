@@ -1,8 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import { ForecastTable } from "./ForecastTable";
 import { UnmatchedList } from "./UnmatchedList";
 import { AddRuleModal } from "./AddRuleModal";
-import { ManageRulesModal } from "./ManageRulesModal"; // <--- Import this
+import { ManageRulesModal } from "./ManageRulesModal";
 import { generateForecastInstances } from "./actions";
 import { getCycleKeyForDate } from "@/lib/finance-utils";
 
@@ -25,73 +25,55 @@ export default async function ForecastPage({
   const resolvedParams = await searchParams;
   const year = Number(resolvedParams?.year ?? new Date().getFullYear());
 
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+  const fetchStart = new Date(Date.UTC(year - 1, 10, 1)).toISOString().split("T")[0];
+  const fetchEnd = new Date(Date.UTC(year + 1, 2, 1)).toISOString().split("T")[0];
 
-  const fetchStart = new Date(Date.UTC(year - 1, 10, 1)).toISOString();
-  const fetchEnd = new Date(Date.UTC(year + 1, 2, 1)).toISOString();
-
-  const [
-    { data: accounts },
-    { data: txInRange },
-    { data: rules },
-    { data: dbCycles },
-    { data: categories },
-  ] = await Promise.all([
-    supabase.from("accounts").select("*"),
-    supabase
-      .from("transactions")
-      .select("account_id, amount, amount_eur, date, description, category, id")
-      .gte("date", fetchStart)
-      .lt("date", fetchEnd)
-      .order("date", { ascending: true }),
-    supabase.from("forecast_rules").select("*").eq("is_active", true),
-    supabase.from("cycles").select("*"),
-    supabase.from("categories").select("id, name").order("name"),
+  const [accounts, txInRange, rules, dbCycles, categories] = await Promise.all([
+    sql`SELECT * FROM accounts`,
+    sql`
+      SELECT account_id, amount, amount_eur, date, description, category, id
+      FROM transactions
+      WHERE date >= ${fetchStart} AND date < ${fetchEnd}
+      ORDER BY date ASC
+    `,
+    sql`SELECT * FROM forecast_rules WHERE is_active = true`,
+    sql`SELECT * FROM cycles`,
+    sql`SELECT id, name FROM categories ORDER BY name`,
   ]);
 
-  await generateForecastInstances({
-    startDate: `${year}-01-01`,
-    horizonMonths: 12,
-  });
+  await generateForecastInstances({ startDate: `${year}-01-01`, horizonMonths: 12 });
 
-  const { data: fcInRange } = await supabase
-    .from("forecast_instances")
-    .select("*")
-    .gte("date", fetchStart)
-    .lt("date", fetchEnd);
+  const fcInRange = await sql`
+    SELECT * FROM forecast_instances
+    WHERE date >= ${fetchStart} AND date < ${fetchEnd}
+  `;
 
   const ruleById = new Map<string, any>();
-  rules?.forEach((r) => ruleById.set(r.id, r));
+  rules.forEach((r) => ruleById.set(r.id, r));
 
   const categoryActuals = new Map<string, number>();
-  const getCatKey = (cycleKey: string, category: string) =>
-    `${cycleKey}|${category}`;
+  const getCatKey = (cycleKey: string, category: string) => `${cycleKey}|${category}`;
 
-  txInRange?.forEach((tx) => {
+  txInRange.forEach((tx) => {
     if (tx.category && tx.category !== "Uncategorized") {
-      const cycleKey = getSmartCycleKey(new Date(tx.date), dbCycles || []);
+      const cycleKey = getSmartCycleKey(new Date(tx.date), dbCycles);
       const key = getCatKey(cycleKey, tx.category);
-      const val = tx.amount_eur ?? tx.amount;
+      const val = Number(tx.amount_eur ?? tx.amount);
       categoryActuals.set(key, (categoryActuals.get(key) || 0) + val);
     }
   });
 
-  const relevantForecastInstances =
-    fcInRange?.filter((f) => f.status !== "skipped") ?? [];
+  const relevantForecastInstances = fcInRange.filter((f) => f.status !== "skipped");
 
   const linkedTxIds = new Set(
-    fcInRange?.filter((f) => f.transaction_id).map((f) => f.transaction_id),
+    fcInRange.filter((f) => f.transaction_id).map((f) => f.transaction_id),
   );
 
-  const unmatchedTx =
-    txInRange?.filter((tx) => {
-      if (linkedTxIds.has(tx.id)) return false;
-      if (tx.category && tx.category !== "Uncategorized") return false;
-      return true;
-    }) ?? [];
+  const unmatchedTx = txInRange.filter((tx) => {
+    if (linkedTxIds.has(tx.id)) return false;
+    if (tx.category && tx.category !== "Uncategorized") return false;
+    return true;
+  });
 
   const enrichedProjected = relevantForecastInstances
     .filter((f) => f.status === "projected")
@@ -110,7 +92,7 @@ export default async function ForecastPage({
   const processedCategoriesPerMonth = new Set<string>();
 
   for (const f of relevantForecastInstances) {
-    const k = getSmartCycleKey(new Date(f.date), dbCycles || []);
+    const k = getSmartCycleKey(new Date(f.date), dbCycles);
     if (!k.startsWith(`${year}-`)) continue;
     if (!detailsByMonth[k]) detailsByMonth[k] = [];
 
@@ -118,12 +100,11 @@ export default async function ForecastPage({
     const category = rule?.category;
     let amount = Number(f.override_amount ?? f.amount);
 
-    let budgetRealized = 0;
-    let isBudget = rule?.type === "budget" && category;
+    const isBudget = rule?.type === "budget" && category;
 
     if (isBudget) {
       const catKey = getCatKey(k, category);
-      budgetRealized = categoryActuals.get(catKey) || 0;
+      const budgetRealized = categoryActuals.get(catKey) || 0;
       processedCategoriesPerMonth.add(catKey);
 
       const remaining = amount - budgetRealized;
@@ -138,7 +119,7 @@ export default async function ForecastPage({
           ruleId: f.rule_id,
           ruleType: "budget",
           ruleName: rule?.name,
-          category: category,
+          category,
           isAggregated: true,
         });
       }
@@ -146,12 +127,12 @@ export default async function ForecastPage({
         detailsByMonth[k].push({
           id: f.id,
           date: f.date,
-          amount: amount,
+          amount,
           status: "projected",
           ruleId: f.rule_id,
           ruleType: "budget",
           ruleName: rule?.name,
-          category: category,
+          category,
         });
       }
     } else {
@@ -163,7 +144,7 @@ export default async function ForecastPage({
         ruleId: f.rule_id,
         ruleType: rule?.type,
         ruleName: rule?.name,
-        category: category,
+        category,
         note: f.note,
         transaction_id: f.transaction_id,
       });
@@ -179,7 +160,7 @@ export default async function ForecastPage({
     detailsByMonth[cycleKey].push({
       id: `implied-${key}`,
       date: `${cycleKey}-01`,
-      amount: amount,
+      amount,
       status: "realized",
       ruleType: "budget",
       ruleName: catName,
@@ -198,18 +179,11 @@ export default async function ForecastPage({
     });
 
     const items = detailsByMonth[key] ?? [];
-    const opening = 0;
-    const actual = items
-      .filter((i) => i.status === "realized")
-      .reduce((sum, i) => sum + i.amount, 0);
-    const projected = items
-      .filter((i) => i.status === "projected")
-      .reduce((sum, i) => sum + i.amount, 0);
-
+    const actual = items.filter((i) => i.status === "realized").reduce((sum, i) => sum + i.amount, 0);
+    const projected = items.filter((i) => i.status === "projected").reduce((sum, i) => sum + i.amount, 0);
     const net = actual + projected;
-    const closing = opening + net;
 
-    return { key, label, opening, actual, projected, net, closing };
+    return { key, label, opening: 0, actual, projected, net, closing: net };
   });
 
   let runningBalance = 0;
@@ -230,14 +204,10 @@ export default async function ForecastPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* NEW: Manage Rules Button */}
-          <ManageRulesModal rules={rules || []} />
-
+          <ManageRulesModal rules={rules as any} />
           <AddRuleModal
-            categories={categories || []}
-            accountId={
-              accounts?.find((a) => a.name.includes("Revolut Main"))?.id
-            }
+            categories={categories as any}
+            accountId={accounts.find((a: any) => a.name.includes("Revolut Main"))?.id}
           />
           <div className="h-6 w-px bg-slate-200 mx-2" />
           <a

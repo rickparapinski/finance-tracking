@@ -1,10 +1,9 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { getCycleStartDate } from "@/lib/finance-utils";
 
-// --- PURE DATE HELPERS ---
 function toISODateOnly(d: Date) {
   return d.toISOString().slice(0, 10);
 }
@@ -19,18 +18,11 @@ function addMonthsClamped(dateISO: string, monthsToAdd: number) {
   const targetYear = year + Math.floor(targetMonthIndex / 12);
   const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
 
-  const lastDay = new Date(
-    Date.UTC(targetYear, targetMonth + 1, 0),
-  ).getUTCDate();
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
   const clampedDay = Math.min(day, lastDay);
 
   return toISODateOnly(new Date(Date.UTC(targetYear, targetMonth, clampedDay)));
 }
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
 
 // --- 1. MANAGE RULES ---
 
@@ -38,11 +30,7 @@ export async function upsertForecastRule(formData: FormData) {
   const id = formData.get("id") as string;
   const name = formData.get("name") as string;
   const amount = parseFloat(formData.get("amount") as string);
-  const type = formData.get("type") as
-    | "recurring"
-    | "one_off"
-    | "installment"
-    | "budget";
+  const type = formData.get("type") as string;
   const frequency = (formData.get("frequency") as string) || "monthly";
   const start_date = formData.get("start_date") as string;
   const account_id = formData.get("account_id") as string;
@@ -52,47 +40,28 @@ export async function upsertForecastRule(formData: FormData) {
     ? parseInt(formData.get("installments_count") as string)
     : null;
 
-  const payload = {
-    name,
-    amount,
-    type,
-    frequency,
-    start_date,
-    end_date,
-    installments_count,
-    account_id,
-    category,
-    is_active: true,
-  };
-
-  const { error } = id
-    ? await supabase.from("forecast_rules").update(payload).eq("id", id)
-    : await supabase.from("forecast_rules").insert(payload);
-
-  if (error) throw new Error(error.message);
+  if (id) {
+    await sql`
+      UPDATE forecast_rules
+      SET name = ${name}, amount = ${amount}, type = ${type}, frequency = ${frequency},
+          start_date = ${start_date}, end_date = ${end_date}, installments_count = ${installments_count},
+          account_id = ${account_id}, category = ${category}, is_active = true
+      WHERE id = ${id}
+    `;
+  } else {
+    await sql`
+      INSERT INTO forecast_rules (name, amount, type, frequency, start_date, end_date, installments_count, account_id, category, is_active)
+      VALUES (${name}, ${amount}, ${type}, ${frequency}, ${start_date}, ${end_date}, ${installments_count}, ${account_id}, ${category}, true)
+    `;
+  }
 
   await generateForecastInstances({ startDate: start_date, horizonMonths: 12 });
   revalidatePath("/forecast");
 }
 
 export async function deleteForecastRule(ruleId: string) {
-  // 1. Delete future instances (clean up the graph)
-  const { error: instError } = await supabase
-    .from("forecast_instances")
-    .delete()
-    .eq("rule_id", ruleId)
-    .eq("status", "projected");
-
-  if (instError) throw new Error(instError.message);
-
-  // 2. Soft delete the rule (keep realized history safe)
-  const { error } = await supabase
-    .from("forecast_rules")
-    .update({ is_active: false })
-    .eq("id", ruleId);
-
-  if (error) throw new Error(error.message);
-
+  await sql`DELETE FROM forecast_instances WHERE rule_id = ${ruleId} AND status = 'projected'`;
+  await sql`UPDATE forecast_rules SET is_active = false WHERE id = ${ruleId}`;
   revalidatePath("/forecast");
 }
 
@@ -102,69 +71,43 @@ export async function linkTransactionToForecast(
   transactionId: string,
   instanceId: string,
 ) {
-  const { data: tx } = await supabase
-    .from("transactions")
-    .select("amount")
-    .eq("id", transactionId)
-    .single();
-
-  const { data: inst } = await supabase
-    .from("forecast_instances")
-    .select("*")
-    .eq("id", instanceId)
-    .single();
+  const [tx] = await sql`SELECT amount FROM transactions WHERE id = ${transactionId}`;
+  const [inst] = await sql`SELECT * FROM forecast_instances WHERE id = ${instanceId}`;
 
   if (!tx || !inst) throw new Error("Not found");
 
-  const currentProjected = inst.override_amount ?? inst.amount;
-  const isPartial = Math.abs(tx.amount) < Math.abs(currentProjected) - 0.05;
+  const currentProjected = Number(inst.override_amount ?? inst.amount);
+  const isPartial = Math.abs(Number(tx.amount)) < Math.abs(currentProjected) - 0.05;
 
   if (isPartial) {
-    const remainder = currentProjected - tx.amount;
-    await supabase
-      .from("forecast_instances")
-      .update({
-        status: "realized",
-        transaction_id: transactionId,
-        amount: tx.amount,
-        override_amount: null,
-      })
-      .eq("id", instanceId);
-    await supabase.from("forecast_instances").insert({
-      rule_id: inst.rule_id,
-      date: inst.date,
-      amount: remainder,
-      status: "projected",
-    });
+    const remainder = currentProjected - Number(tx.amount);
+    await sql`
+      UPDATE forecast_instances
+      SET status = 'realized', transaction_id = ${transactionId},
+          amount = ${tx.amount}, override_amount = null
+      WHERE id = ${instanceId}
+    `;
+    await sql`
+      INSERT INTO forecast_instances (rule_id, date, amount, status)
+      VALUES (${inst.rule_id}, ${inst.date}, ${remainder}, 'projected')
+    `;
   } else {
-    await supabase
-      .from("forecast_instances")
-      .update({
-        status: "realized",
-        transaction_id: transactionId,
-        amount: tx.amount,
-      })
-      .eq("id", instanceId);
+    await sql`
+      UPDATE forecast_instances
+      SET status = 'realized', transaction_id = ${transactionId}, amount = ${tx.amount}
+      WHERE id = ${instanceId}
+    `;
   }
   revalidatePath("/forecast");
 }
 
-export async function updateForecastInstanceAmount(
-  instanceId: string,
-  newAmount: number,
-) {
-  await supabase
-    .from("forecast_instances")
-    .update({ amount: newAmount })
-    .eq("id", instanceId);
+export async function updateForecastInstanceAmount(instanceId: string, newAmount: number) {
+  await sql`UPDATE forecast_instances SET amount = ${newAmount} WHERE id = ${instanceId}`;
   revalidatePath("/forecast");
 }
 
 export async function resetForecast() {
-  await supabase
-    .from("forecast_instances")
-    .delete()
-    .neq("id", "00000000-0000-0000-0000-000000000000");
+  await sql`DELETE FROM forecast_instances`;
   revalidatePath("/forecast");
 }
 
@@ -177,28 +120,25 @@ export async function generateForecastInstances({
   startDate: string;
   horizonMonths?: number;
 }) {
-  const [{ data: rules }, { data: cycles }] = await Promise.all([
-    supabase.from("forecast_rules").select("*").eq("is_active", true),
-    supabase.from("cycles").select("*"),
+  const [rules, cycles] = await Promise.all([
+    sql`SELECT * FROM forecast_rules WHERE is_active = true`,
+    sql`SELECT * FROM cycles`,
   ]);
 
-  if (!rules || rules.length === 0) return;
+  if (!rules.length) return;
 
   const ruleIds = rules.map((r) => r.id);
   const checkDate = new Date(startDate);
   checkDate.setDate(checkDate.getDate() - 45);
   const checkDateStr = toISODateOnly(checkDate);
 
-  const { data: existing } = await supabase
-    .from("forecast_instances")
-    .select("rule_id, date")
-    .in("rule_id", ruleIds)
-    .gte("date", checkDateStr);
+  const existing = await sql`
+    SELECT rule_id, date FROM forecast_instances
+    WHERE rule_id = ANY(${ruleIds}) AND date >= ${checkDateStr}
+  `;
 
   const existingSet = new Set<string>();
-  (existing || []).forEach((row) =>
-    existingSet.add(`${row.rule_id}|${row.date}`),
-  );
+  existing.forEach((row) => existingSet.add(`${row.rule_id}|${row.date}`));
 
   const inserts: any[] = [];
 
@@ -216,13 +156,11 @@ export async function generateForecastInstances({
         const cMonth = loopDate.getUTCMonth();
         const cycleKey = `${cYear}-${String(cMonth + 1).padStart(2, "0")}`;
 
-        const custom = cycles?.find((c) => c.key === cycleKey);
-
+        const custom = cycles.find((c) => c.key === cycleKey);
         if (custom) {
           dates.push(custom.start_date);
         } else {
-          const d = getCycleStartDate(cYear, cMonth);
-          dates.push(toISODateOnly(d));
+          dates.push(toISODateOnly(getCycleStartDate(cYear, cMonth)));
         }
       }
     } else if (rule.type === "recurring") {
@@ -249,16 +187,11 @@ export async function generateForecastInstances({
       if (rule.end_date && date > rule.end_date) continue;
       if (date < checkDateStr) continue;
 
-      inserts.push({
-        rule_id: rule.id,
-        date: date,
-        amount: rule.amount,
-        status: "projected",
-      });
+      inserts.push({ rule_id: rule.id, date, amount: rule.amount, status: "projected" });
     }
   }
 
   if (inserts.length > 0) {
-    await supabase.from("forecast_instances").insert(inserts);
+    await sql`INSERT INTO forecast_instances ${sql(inserts)} ON CONFLICT (rule_id, date) DO NOTHING`;
   }
 }

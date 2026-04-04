@@ -1,6 +1,6 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import {
   getCurrentCycle,
@@ -8,11 +8,6 @@ import {
   getRateForDay,
   convertToEur,
 } from "@/lib/finance-utils";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
 
 export async function createTransaction(formData: FormData) {
   const account_id = String(formData.get("account_id") || "");
@@ -28,21 +23,11 @@ export async function createTransaction(formData: FormData) {
   const amount = Number(amountRaw);
   if (Number.isNaN(amount)) throw new Error("Invalid amount");
 
-  // Load account currency (source of truth)
-  const { data: acc, error: accErr } = await supabase
-    .from("accounts")
-    .select("currency")
-    .eq("id", account_id)
-    .single();
+  const [acc] = await sql`SELECT currency FROM accounts WHERE id = ${account_id}`;
 
-  if (accErr || !acc?.currency) {
-    console.error("Account currency fetch failed:", accErr);
-    throw new Error("Failed to load account currency");
-  }
+  if (!acc?.currency) throw new Error("Failed to load account currency");
 
   const original_currency = acc.currency;
-
-  // Compute amount_eur (always filled)
   let amount_eur = amount;
 
   if (original_currency !== "EUR") {
@@ -50,39 +35,19 @@ export async function createTransaction(formData: FormData) {
     const rates = await fetchCycleRates(start, end, original_currency);
 
     if (rates) {
-      const rateFromPerEur = getRateForDay(
-        rates,
-        new Date(dateStr),
-        original_currency,
-      );
-
+      const rateFromPerEur = getRateForDay(rates, new Date(dateStr), original_currency);
       if (rateFromPerEur) {
         amount_eur = Number(
-          convertToEur({
-            amount,
-            fromCurrency: original_currency,
-            rateFromPerEur,
-          }).toFixed(2),
+          convertToEur({ amount, fromCurrency: original_currency, rateFromPerEur }).toFixed(2),
         );
       }
     }
   }
 
-  const { error } = await supabase.from("transactions").insert({
-    account_id,
-    date: dateStr,
-    description,
-    category,
-    amount,
-    is_manual: true,
-    original_currency,
-    amount_eur,
-  });
-
-  if (error) {
-    console.error("createTransaction error:", error);
-    throw new Error("Failed to create transaction");
-  }
+  await sql`
+    INSERT INTO transactions (account_id, date, description, category, amount, is_manual, original_currency, amount_eur)
+    VALUES (${account_id}, ${dateStr}, ${description}, ${category}, ${amount}, true, ${original_currency}, ${amount_eur})
+  `;
 
   revalidatePath(`/accounts/${account_id}`);
   revalidatePath("/transactions");

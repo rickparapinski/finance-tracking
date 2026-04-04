@@ -1,12 +1,7 @@
 // lib/db-loader.ts
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import { NormalizedTransaction } from "./adapters/types";
-import { fetchRatesForBatch } from "./enricher"; // keep FX helper for now
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+import { fetchRatesForBatch } from "./enricher";
 
 type CategoryRuleRow = {
   category_id: string;
@@ -20,7 +15,6 @@ type CategoryRuleRow = {
 };
 
 function txKey(date: string, amount: number, description: string) {
-  // Normalize description to reduce false negatives due to spacing/case
   const d = (description || "").trim().replace(/\s+/g, " ").toLowerCase();
   return `${date}|${amount}|${d}`;
 }
@@ -50,21 +44,20 @@ function categorizeDescription(
 }
 
 async function fetchActiveCategoryRules(): Promise<CategoryRuleRow[]> {
-  // NOTE:
-  // If your relationship name is not `categories`, Supabase might expose it as:
-  // - `category` or something else depending on FK naming.
-  // In that case, change `categories(...)` below to the relation name.
-  const { data, error } = await supabase
-    .from("category_rules")
-    .select(
-      "category_id, pattern, is_case_sensitive, priority, is_active, categories(name, is_active)",
-    )
-    .eq("is_active", true)
-    .order("priority", { ascending: true });
-
-  if (error) throw new Error(error.message);
-
-  return (data as any as CategoryRuleRow[]) || [];
+  const rows = await sql`
+    SELECT
+      cr.category_id,
+      cr.pattern,
+      cr.is_case_sensitive,
+      cr.priority,
+      cr.is_active,
+      json_build_object('name', c.name, 'is_active', c.is_active) AS categories
+    FROM category_rules cr
+    LEFT JOIN categories c ON cr.category_id = c.id
+    WHERE cr.is_active = true
+    ORDER BY cr.priority ASC
+  `;
+  return rows as unknown as CategoryRuleRow[];
 }
 
 export async function saveTransactions(
@@ -82,8 +75,6 @@ export async function saveTransactions(
 
   // 3) Prepare data for insertion
   const payload = transactions.map((trans) => {
-    // A) Categorize using rules (description-only)
-    // If adapter already provided a category, keep it.
     const existingCategory =
       trans.category && String(trans.category).trim().length > 0
         ? String(trans.category).trim()
@@ -94,11 +85,10 @@ export async function saveTransactions(
 
     const finalCategory = ruleCategory ?? "Uncategorized";
 
-    // B) Calculate EUR Amount
     let amountInEur = trans.amount;
 
     if (trans.currency === "BRL") {
-      const dateKey = trans.date; // "YYYY-MM-DD"
+      const dateKey = trans.date;
       const rate = ratesMap[dateKey]?.BRL || 6.0;
       amountInEur = trans.amount / rate;
     }
@@ -106,8 +96,8 @@ export async function saveTransactions(
     return {
       account_id: accountId,
       date: trans.date,
-      amount: trans.amount, // Original Amount
-      amount_eur: amountInEur, // Normalized Amount
+      amount: trans.amount,
+      amount_eur: amountInEur,
       description: trans.description,
       category: finalCategory,
       original_currency: trans.currency,
@@ -116,24 +106,20 @@ export async function saveTransactions(
   });
 
   // 4) Fast duplicate detection (single query) + bulk insert
-
-  // Determine date range of this import batch
-  const dates = payload.map((p) => p.date).sort(); // YYYY-MM-DD sorts lexicographically fine
+  const dates = payload.map((p) => p.date).sort();
   const minDate = dates[0];
   const maxDate = dates[dates.length - 1];
 
-  // Fetch existing rows only in this date range for this account
-  const { data: existingRows, error: existingErr } = await supabase
-    .from("transactions")
-    .select("date, amount, description")
-    .eq("account_id", accountId)
-    .gte("date", minDate)
-    .lte("date", maxDate);
-
-  if (existingErr) throw new Error(existingErr.message);
+  const existingRows = await sql`
+    SELECT date, amount, description
+    FROM transactions
+    WHERE account_id = ${accountId}
+      AND date >= ${minDate}
+      AND date <= ${maxDate}
+  `;
 
   const existingSet = new Set<string>();
-  (existingRows || []).forEach((r: any) => {
+  existingRows.forEach((r: any) => {
     existingSet.add(txKey(r.date, Number(r.amount), String(r.description)));
   });
 
@@ -143,7 +129,7 @@ export async function saveTransactions(
     if (existingSet.has(key)) duplicateCount++;
     else {
       newRows.push(row);
-      existingSet.add(key); // also dedupe within the imported file itself
+      existingSet.add(key);
     }
   }
 
@@ -151,10 +137,9 @@ export async function saveTransactions(
     return { savedCount: 0, duplicateCount };
   }
 
-  // Bulk insert in chunks (safe for large imports)
+  // Bulk insert in chunks
   for (const part of chunk(newRows, 500)) {
-    const { error } = await supabase.from("transactions").insert(part);
-    if (error) throw new Error(error.message);
+    await sql`INSERT INTO transactions ${sql(part)}`;
     savedCount += part.length;
   }
 

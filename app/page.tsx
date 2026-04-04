@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import { fetchCurrentCycle, formatCurrency } from "@/lib/finance-utils";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,59 +8,50 @@ import { ReportsCard } from "@/components/dashboard/reports-card";
 import { SchedulerCard } from "@/components/dashboard/scheduler-card";
 import { cn } from "@/lib/utils";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
-
-// Ensure fresh data
 export const revalidate = 0;
 
 export default async function Dashboard() {
   const { start, end } = await fetchCurrentCycle();
 
-  // 1. Fetch Accounts
-  const { data: accounts } = await supabase
-    .from("accounts")
-    .select("id, name, currency, type, initial_balance")
-    .order("name");
+  const startStr = start.toISOString().split("T")[0];
+  const endStr = end.toISOString().split("T")[0];
 
-  // 2. Fetch Cycle Transactions (For Income/Expense Charts)
-  const { data: cycleTransactions } = await supabase
-    .from("transactions")
-    .select("*")
-    .gte("date", start.toISOString().split("T")[0])
-    .lte("date", end.toISOString().split("T")[0])
-    .order("date", { ascending: false });
+  const accounts = await sql`
+    SELECT id, name, currency, type, initial_balance
+    FROM accounts
+    ORDER BY name
+  `;
 
-  // 3. Fetch ALL Transactions (For Account Balances)
-  const { data: allHistory } = await supabase
-    .from("transactions")
-    .select("account_id, amount");
+  const cycleTransactions = await sql`
+    SELECT * FROM transactions
+    WHERE date >= ${startStr} AND date <= ${endStr}
+    ORDER BY date DESC
+  `;
 
-  // --- CALCULATION LOGIC ---
+  const allHistory = await sql`
+    SELECT account_id, amount FROM transactions
+  `;
 
-  // A. Calculate Account Balances (Initial + History)
-  const accountBalances = accounts?.map((acc) => {
+  // A. Calculate Account Balances
+  const accountBalances = accounts.map((acc) => {
     const totalActivity =
       allHistory
-        ?.filter((t) => t.account_id === acc.id)
-        .reduce((sum, t) => sum + t.amount, 0) || 0;
+        .filter((t) => t.account_id === acc.id)
+        .reduce((sum, t) => sum + Number(t.amount), 0);
 
     return {
       ...acc,
-      currentBalance: acc.initial_balance + totalActivity,
+      currentBalance: Number(acc.initial_balance) + totalActivity,
     };
   });
 
-  // B. Calculate Monthly Stats (Income vs Expense)
+  // B. Calculate Monthly Stats
   let totalIncome = 0;
   let totalExpense = 0;
   const categoryTotals: Record<string, number> = {};
 
-  cycleTransactions?.forEach((t) => {
-    // We use amount_eur if available, otherwise fallback to amount (assuming EUR)
-    const val = t.amount_eur || t.amount;
+  cycleTransactions.forEach((t) => {
+    const val = Number(t.amount_eur ?? t.amount);
 
     if (val < 0) {
       totalExpense += Math.abs(val);
@@ -76,32 +67,26 @@ export default async function Dashboard() {
     ([, a], [, b]) => b - a,
   );
 
-  // --- TOP ROW CARD DATA (for the 3 widgets) ---
+  const top3Transactions = cycleTransactions.slice(0, 3).map((t) => {
+    const val = Number(t.amount_eur ?? t.amount);
+    return {
+      id: String(t.id),
+      description: t.description,
+      category: t.category,
+      date: t.date,
+      amount: val,
+      currency: "EUR",
+    };
+  });
 
-  // 1) All Transactions (take the 3 most recent items in the cycle)
-  const top3Transactions =
-    cycleTransactions?.slice(0, 3).map((t) => {
-      const val = t.amount_eur ?? t.amount; // fallback if amount_eur is null
-      return {
-        id: String(t.id),
-        description: t.description,
-        category: t.category,
-        date: t.date,
-        amount: val, // keep sign; card colors it
-        currency: "EUR",
-      };
-    }) || [];
-
-  // 2) Reports: "Worth" = sum of account current balances
-  const netWorth =
-    accountBalances?.reduce((sum, a) => sum + (a.currentBalance || 0), 0) || 0;
-
-  // 3) Reports: "Spent" = total expenses in this cycle (already positive in your calc)
+  const netWorth = accountBalances.reduce(
+    (sum, a) => sum + (a.currentBalance || 0),
+    0,
+  );
   const spentThisCycle = totalExpense;
 
   return (
     <div className="p-6 md:p-10 space-y-10">
-      {/* HEADER */}
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
           Overview
@@ -111,16 +96,13 @@ export default async function Dashboard() {
         </p>
       </header>
 
-      {/* 1. ALL TRANSACTIONS, REPORTS AND SCHEDULER */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         <AllTransactionsCard items={top3Transactions} currency="EUR" />
         <ReportsCard worth={netWorth} spent={spentThisCycle} currency="EUR" />
         <SchedulerCard />
       </div>
 
-      {/* 3. MAIN CONTENT SPLIT */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left: Spending Breakdown */}
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle>Top Spending</CardTitle>
@@ -156,8 +138,6 @@ export default async function Dashboard() {
     </div>
   );
 }
-
-// --- SUB-COMPONENTS ---
 
 function StatCard({
   title,

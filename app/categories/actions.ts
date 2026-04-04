@@ -1,12 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+import { sql } from "@/lib/db";
 
 async function syncBudgetRule(
   categoryId: string,
@@ -14,101 +9,49 @@ async function syncBudgetRule(
   type: string,
   budget: number,
 ) {
-  // 1. If budget is 0 or negative, remove any existing budget rule
   if (!budget || budget <= 0) {
-    // First, find the rule ID so we can clean up instances (if no CASCADE on DB)
-    const { data: existing } = await supabase
-      .from("forecast_rules")
-      .select("id")
-      .eq("category_id", categoryId)
-      .eq("type", "budget")
-      .single();
+    const [existing] = await sql`
+      SELECT id FROM forecast_rules
+      WHERE category_id = ${categoryId} AND type = 'budget'
+    `;
 
     if (existing) {
-      // Optional: Clean up projected instances explicitly
-      await supabase
-        .from("forecast_instances")
-        .delete()
-        .eq("rule_id", existing.id)
-        .eq("status", "projected");
-
-      // Delete the rule
-      await supabase.from("forecast_rules").delete().eq("id", existing.id);
+      await sql`DELETE FROM forecast_instances WHERE rule_id = ${existing.id} AND status = 'projected'`;
+      await sql`DELETE FROM forecast_rules WHERE id = ${existing.id}`;
     }
     return;
   }
 
-  // 2. Logic: Expenses should be negative for the forecast math
   const finalAmount = type === "expense" ? -Math.abs(budget) : Math.abs(budget);
 
-  // 3. Robust Upsert (Check existence manually)
-  const { data: existing } = await supabase
-    .from("forecast_rules")
-    .select("id")
-    .eq("category_id", categoryId)
-    .eq("type", "budget")
-    .single();
+  const [existing] = await sql`
+    SELECT id FROM forecast_rules
+    WHERE category_id = ${categoryId} AND type = 'budget'
+  `;
 
   if (existing) {
-    // A) UPDATE existing rule
-    const { error } = await supabase
-      .from("forecast_rules")
-      .update({
-        name: `Budget: ${name}`,
-        category: name,
-        amount: finalAmount,
-        is_active: true,
-      })
-      .eq("id", existing.id);
-
-    if (error) throw new Error(`Failed to update rule: ${error.message}`);
-
-    // --- FIX START: Propagate change to future instances ---
-    // We only update "projected" items. "realized" (paid) items should stay as they were.
-    await supabase
-      .from("forecast_instances")
-      .update({ amount: finalAmount })
-      .eq("rule_id", existing.id)
-      .eq("status", "projected");
-    // --- FIX END ---
+    await sql`
+      UPDATE forecast_rules
+      SET name = ${"Budget: " + name}, category = ${name}, amount = ${finalAmount}, is_active = true
+      WHERE id = ${existing.id}
+    `;
+    await sql`
+      UPDATE forecast_instances
+      SET amount = ${finalAmount}
+      WHERE rule_id = ${existing.id} AND status = 'projected'
+    `;
   } else {
-    // B) INSERT new rule
-    const { data: acc } = await supabase
-      .from("accounts")
-      .select("id")
-      .limit(1)
-      .maybeSingle();
+    const [acc] = await sql`SELECT id FROM accounts LIMIT 1`;
 
-    if (!acc) {
-      throw new Error(
-        "You must have at least one account created to add a budget.",
-      );
-    }
+    if (!acc) throw new Error("You must have at least one account created to add a budget.");
 
-    // Insert the rule
-    const { data: newRule, error } = await supabase
-      .from("forecast_rules")
-      .insert({
-        account_id: acc.id,
-        category_id: categoryId,
-        name: `Budget: ${name}`,
-        type: "budget",
-        category: name,
-        amount: finalAmount,
-        currency: "EUR",
-        start_date: new Date().toISOString().slice(0, 10),
-        frequency: "monthly",
-        day_of_month: 1,
-        is_active: true,
-      })
-      .select("id")
-      .single();
-
-    if (error) throw new Error(`Failed to create rule: ${error.message}`);
-
-    // Trigger generation immediately so the user sees it without refreshing twice
-    // (You'll need to export generateForecastInstances from app/forecast/actions.ts or reimplement basic loop here)
-    // For now, simple revalidation usually handles it if the Forecast page calls generate on load.
+    await sql`
+      INSERT INTO forecast_rules
+        (account_id, category_id, name, type, category, amount, currency, start_date, frequency, day_of_month, is_active)
+      VALUES
+        (${acc.id}, ${categoryId}, ${"Budget: " + name}, 'budget', ${name}, ${finalAmount},
+         'EUR', ${new Date().toISOString().slice(0, 10)}, 'monthly', 1, true)
+    `;
   }
 }
 
@@ -120,16 +63,12 @@ export async function createCategory(formData: FormData) {
 
   if (!name) throw new Error("Category name is required");
 
-  // 1. Insert Category
-  const { data, error } = await supabase
-    .from("categories")
-    .insert([{ name, type, color, monthly_budget: budget }])
-    .select("id")
-    .single();
+  const [data] = await sql`
+    INSERT INTO categories (name, type, color, monthly_budget)
+    VALUES (${name}, ${type}, ${color}, ${budget})
+    RETURNING id
+  `;
 
-  if (error) throw new Error(error.message);
-
-  // 2. Sync Forecast Rule
   await syncBudgetRule(data.id, name, type, budget);
 
   revalidatePath("/categories");
@@ -145,27 +84,19 @@ export async function updateCategory(formData: FormData) {
 
   if (!id) throw new Error("Missing category id");
 
-  const { error } = await supabase
-    .from("categories")
-    .update({ name, type, color, is_active, monthly_budget: budget })
-    .eq("id", id);
+  await sql`
+    UPDATE categories
+    SET name = ${name}, type = ${type}, color = ${color}, is_active = ${is_active}, monthly_budget = ${budget}
+    WHERE id = ${id}
+  `;
 
-  if (error) throw new Error(error.message);
-
-  if (is_active) {
-    await syncBudgetRule(id, name, type, budget);
-  } else {
-    await syncBudgetRule(id, name, type, 0);
-  }
+  await syncBudgetRule(id, name, type, is_active ? budget : 0);
 
   revalidatePath("/categories");
 }
 
 export async function deleteCategory(id: string) {
-  // Optional: Trigger delete on forecast_rules too if you don't have ON DELETE CASCADE
-  await supabase.from("forecast_rules").delete().eq("category_id", id);
-
-  const { error } = await supabase.from("categories").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  await sql`DELETE FROM forecast_rules WHERE category_id = ${id}`;
+  await sql`DELETE FROM categories WHERE id = ${id}`;
   revalidatePath("/categories");
 }

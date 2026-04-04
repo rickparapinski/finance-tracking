@@ -1,40 +1,29 @@
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import { DataTable } from "./data-table";
 import { columns } from "./columns";
 import { createManualTransaction } from "./actions";
 import Link from "next/link";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
-
 export const revalidate = 0;
 
 export default async function TransactionsPage() {
-  // 1. Fetch Data
-  const { data: transactions } = await supabase
-    .from("transactions")
-    .select("*, accounts(name)")
-    .order("date", { ascending: false });
+  const transactions = await sql`
+    SELECT t.*, json_build_object('name', a.name) AS accounts
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
+    ORDER BY t.date DESC
+  `;
 
-  // 2. Fetch Accounts (for the Quick Add form)
-  const { data: accounts } = await supabase.from("accounts").select("id, name");
+  const accounts = await sql`SELECT id, name FROM accounts`;
 
-  // Fetch categories
+  const categories = await sql`
+    SELECT id, name FROM categories ORDER BY name ASC
+  `;
 
-  const { data: categories } = await supabase
-    .from("categories")
-    .select("id, name")
-    .order("name", { ascending: true });
-
-  const uncategorizedCount =
-    transactions?.filter(
-      (t: any) =>
-        !t.category ||
-        t.category.trim() === "" ||
-        t.category === "Uncategorized",
-    ).length ?? 0;
+  const uncategorizedCount = transactions.filter(
+    (t: any) =>
+      !t.category || t.category.trim() === "" || t.category === "Uncategorized",
+  ).length;
 
   return (
     <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-8">
@@ -46,14 +35,13 @@ export default async function TransactionsPage() {
           Browse, filter, edit and add entries.
         </p>
       </header>
-      {/* Quick Add Form */}
+
       <div className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-softer)]">
         <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Add</h3>
         <form
           action={createManualTransaction}
           className="flex flex-wrap gap-3 items-end"
         >
-          {/* Date */}
           <div>
             <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">
               Date
@@ -67,7 +55,6 @@ export default async function TransactionsPage() {
             />
           </div>
 
-          {/* Description */}
           <div className="flex-1 min-w-[200px]">
             <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">
               Description
@@ -80,8 +67,6 @@ export default async function TransactionsPage() {
             />
           </div>
 
-          {/* Category Field */}
-          {/* Category Field */}
           <div className="w-48">
             <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">
               Category
@@ -103,7 +88,6 @@ export default async function TransactionsPage() {
             </select>
           </div>
 
-          {/* Account */}
           <div>
             <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">
               Account
@@ -113,7 +97,7 @@ export default async function TransactionsPage() {
               required
               className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
             >
-              {accounts?.map((a) => (
+              {accounts.map((a: any) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
                 </option>
@@ -121,7 +105,6 @@ export default async function TransactionsPage() {
             </select>
           </div>
 
-          {/* Amount */}
           <div>
             <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">
               Amount
@@ -141,13 +124,13 @@ export default async function TransactionsPage() {
           </button>
         </form>
       </div>
+
       {uncategorizedCount > 0 && (
         <div className="rounded-[var(--radius)] border border-amber-200 bg-amber-50 px-5 py-4 shadow-[var(--shadow-softer)] flex items-center justify-between gap-4">
           <div className="text-sm text-amber-900">
             You have <span className="font-semibold">{uncategorizedCount}</span>{" "}
             uncategorized transactions.
           </div>
-
           <div className="flex items-center gap-2">
             <a
               href="#uncategorized"
@@ -155,7 +138,6 @@ export default async function TransactionsPage() {
             >
               Assign here
             </a>
-
             <Link
               href="/categories"
               className="h-9 rounded-xl border border-amber-300 px-4 text-xs font-medium text-amber-900 hover:bg-amber-100 transition grid place-items-center"
@@ -166,12 +148,11 @@ export default async function TransactionsPage() {
         </div>
       )}
 
-      {/* The New TanStack Table */}
       {transactions && (
         <DataTable
           columns={columns}
           data={transactions as any}
-          categories={(categories ?? []).map((c: any) => c.name)}
+          categories={categories.map((c: any) => c.name)}
           uncategorizedCount={uncategorizedCount}
         />
       )}

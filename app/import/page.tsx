@@ -1,37 +1,26 @@
 "use client";
 import { useState, useEffect } from "react";
-import { createClient } from "@supabase/supabase-js";
 
 import { parseRevolut } from "@/lib/adapters/revolut";
 import { parseNubank } from "@/lib/adapters/nubank";
 import { parseTFBank } from "@/lib/adapters/tfbank";
 import { saveTransactions } from "@/lib/db-loader";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import { getAccountsForImport } from "./actions";
 
 export default function ImportPage() {
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<{ id: string; name: string; currency: string }[]>([]);
   const [selectedAccount, setSelectedAccount] = useState("");
   const [log, setLog] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    supabase
-      .from("accounts")
-      .select("*")
-      .then(({ data }) => {
-        if (data) setAccounts(data);
-      });
+    getAccountsForImport().then(setAccounts);
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !selectedAccount) return;
 
-    // 1. Get the "Selected" account just to know WHICH BANK adapter to use
     let targetAccount = accounts.find((a) => a.id === selectedAccount);
     if (!targetAccount) return;
 
@@ -41,41 +30,25 @@ export default function ImportPage() {
     try {
       let transactions = [];
 
-      // === REVOLUT HANDLING ===
       if (targetAccount.name.includes("Revolut")) {
         transactions = await parseRevolut(file);
-      }
-
-      // === TF BANK HANDLING ===
-      else if (targetAccount.name.includes("TF Bank")) {
+      } else if (targetAccount.name.includes("TF Bank")) {
         const formData = new FormData();
         formData.append("file", file);
-
         setLog((prev) => [...prev, "🚀 Parsing PDF on server..."]);
-
-        // Call the server action directly
         transactions = await parseTFBank(formData);
-      }
-
-      // === NUBANK HANDLING (Smart Routing) ===
-      else if (targetAccount.name.includes("Nubank")) {
+      } else if (targetAccount.name.includes("Nubank")) {
         transactions = await parseNubank(file);
 
-        // DETECT: Is this Checking or Card?
-        // Our adapter sets category='Checking' for the checking CSV.
         const isCheckingFile =
           transactions.length > 0 && transactions[0].category === "Checking";
 
-        // FIND the correct account in your list
         const correctName = isCheckingFile ? "Nubank Checking" : "Nubank Card";
         const smartAccount = accounts.find((a) => a.name === correctName);
 
         if (smartAccount) {
-          targetAccount = smartAccount; // <--- OVERRIDE the user's selection
-          setLog((prev) => [
-            ...prev,
-            `🤖 Smart Detect: Routing to '${correctName}'`,
-          ]);
+          targetAccount = smartAccount;
+          setLog((prev) => [...prev, `🤖 Smart Detect: Routing to '${correctName}'`]);
         } else {
           setLog((prev) => [
             ...prev,
@@ -93,7 +66,6 @@ export default function ImportPage() {
         `🔎 Found ${transactions.length} transactions. Saving to ${targetAccount.name}...`,
       ]);
 
-      // 3. Save to the CORRECT Account ID
       const result = await saveTransactions(targetAccount.id, transactions);
 
       setLog((prev) => [
@@ -116,7 +88,7 @@ export default function ImportPage() {
           Import
         </h1>
         <p className="text-sm text-slate-500">
-          Upload a CSV/PDF and we’ll route it to the correct adapter.
+          Upload a CSV/PDF and we'll route it to the correct adapter.
         </p>
       </header>
       <section className="rounded-[var(--radius)] bg-white p-6 shadow-[var(--shadow-softer)] space-y-5">

@@ -1,19 +1,11 @@
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import { upsertAccount } from "./actions";
 import AccountsClient from "./AccountsClient";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
 
 export const revalidate = 0;
 
 export default async function AccountsPage() {
-  const { data: accounts } = await supabase
-    .from("accounts")
-    .select("*")
-    .order("name");
+  const accounts = await sql`SELECT * FROM accounts ORDER BY name`;
 
   return (
     <main className="min-h-screen p-8 font-sans">
@@ -29,7 +21,6 @@ export default async function AccountsPage() {
           </div>
         </header>
 
-        {/* QUICK ADD (server) */}
         <div className="rounded-[var(--radius)] bg-white p-6 shadow-[var(--shadow-softer)]">
           <h2 className="text-sm font-semibold text-slate-900 mb-4">
             Quick add
@@ -108,8 +99,7 @@ export default async function AccountsPage() {
           </div>
         </div>
 
-        {/* Table + modal (client) */}
-        <AccountsClient accounts={accounts ?? []} />
+        <AccountsClient accounts={accounts as any} />
       </div>
     </main>
   );

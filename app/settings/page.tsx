@@ -1,5 +1,6 @@
 import { getCustomCycles } from "./actions";
 import { CycleManager } from "./cycle-manager";
+import { ResetDataCard } from "./reset-data-card";
 
 export const revalidate = 0;
 
@@ -20,10 +21,7 @@ export default async function SettingsPage() {
       <div className="grid grid-cols-1 gap-8">
         <CycleManager existingCycles={cycles} />
 
-        {/* Placeholder for future settings */}
-        <div className="p-6 border rounded-xl border-dashed border-slate-200 text-center text-slate-400 text-sm">
-          Future settings (Categories, Rules) will go here.
-        </div>
+        <ResetDataCard />
       </div>
     </main>
   );

@@ -1,16 +1,10 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
-
 export async function deleteTransaction(id: string) {
-  const { error } = await supabase.from("transactions").delete().eq("id", id);
-  if (error) throw new Error("Failed to delete transaction");
+  await sql`DELETE FROM transactions WHERE id = ${id}`;
   revalidatePath("/transactions");
 }
 
@@ -22,35 +16,22 @@ export async function createManualTransaction(formData: FormData) {
   const rawCategory = (formData.get("category") as string) ?? "";
   const category = rawCategory.trim() || "Uncategorized";
 
-  // We need to fetch the account currency to set original_currency
-  const { data: account } = await supabase
-    .from("accounts")
-    .select("currency")
-    .eq("id", account_id)
-    .single();
-
+  const [account] = await sql`SELECT currency FROM accounts WHERE id = ${account_id}`;
   if (!account) throw new Error("Account not found");
 
-  const { error } = await supabase.from("transactions").insert({
-    account_id,
-    description,
-    amount, // Negative for expense? User must input sign manually or UI handles it.
-    date,
-    category,
-    original_currency: account.currency,
-    is_manual: true,
-    amount_eur: account.currency === "EUR" ? amount : null, // Basic fallback
-  });
+  await sql`
+    INSERT INTO transactions (account_id, description, amount, date, category, original_currency, is_manual, amount_eur)
+    VALUES (
+      ${account_id}, ${description}, ${amount}, ${date}, ${category},
+      ${account.currency}, true,
+      ${account.currency === "EUR" ? amount : null}
+    )
+  `;
 
-  if (error) throw new Error(error.message);
   revalidatePath("/transactions");
 }
-export async function updateTransaction(formData: FormData) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
 
+export async function updateTransaction(formData: FormData) {
   const id = formData.get("id") as string;
   const date = formData.get("date") as string;
   const description = formData.get("description") as string;
@@ -58,65 +39,41 @@ export async function updateTransaction(formData: FormData) {
   const category = rawCategory.trim() || "Uncategorized";
   const newAmount = parseFloat(formData.get("amount") as string);
 
-  // 1. Fetch the existing transaction to get currency info
-  const { data: oldData } = await supabase
-    .from("transactions")
-    .select("amount, amount_eur")
-    .eq("id", id)
-    .single();
-
+  const [oldData] = await sql`SELECT amount, amount_eur FROM transactions WHERE id = ${id}`;
   if (!oldData) throw new Error("Transaction not found");
 
-  // 2. Smart Recalculation of EUR
-  // If amount changed, we preserve the original exchange rate
-  let newAmountEur = oldData.amount_eur;
-
-  if (newAmount !== oldData.amount) {
-    // Calculate the implied rate from the original transaction
-    // Rate = Local / EUR
-    // Avoid division by zero
-    if (oldData.amount_eur && oldData.amount_eur !== 0) {
-      const impliedRate = oldData.amount / oldData.amount_eur;
+  let newAmountEur = Number(oldData.amount_eur);
+  if (newAmount !== Number(oldData.amount)) {
+    if (oldData.amount_eur && Number(oldData.amount_eur) !== 0) {
+      const impliedRate = Number(oldData.amount) / Number(oldData.amount_eur);
       newAmountEur = newAmount / impliedRate;
     } else {
-      newAmountEur = newAmount; // Fallback if 1:1 or broken
+      newAmountEur = newAmount;
     }
   }
 
-  // 3. Update
-  const { error } = await supabase
-    .from("transactions")
-    .update({
-      date,
-      description,
-      category,
-      amount: newAmount,
-      amount_eur: newAmountEur,
-    })
-    .eq("id", id);
-
-  if (error) throw new Error("Update failed");
+  await sql`
+    UPDATE transactions
+    SET date = ${date}, description = ${description}, category = ${category},
+        amount = ${newAmount}, amount_eur = ${newAmountEur}
+    WHERE id = ${id}
+  `;
 
   revalidatePath("/transactions");
-  revalidatePath("/"); // Update dashboard totals too
+  revalidatePath("/");
 }
 
 export async function bulkAssignCategory(ids: string[], category: string) {
   if (!ids?.length) return;
-
   const cleanCategory = (category ?? "").trim();
   if (!cleanCategory) throw new Error("Category is required");
 
-  const { error } = await supabase
-    .from("transactions")
-    .update({ category: cleanCategory })
-    .in("id", ids);
-
-  if (error) throw new Error(error.message);
+  await sql`UPDATE transactions SET category = ${cleanCategory} WHERE id = ANY(${ids})`;
 
   revalidatePath("/transactions");
-  revalidatePath("/"); // keep dashboard totals in sync (you already do this in updateTransaction)
+  revalidatePath("/");
 }
+
 export type TransactionLinkType =
   | "transfer"
   | "settlement"
@@ -134,56 +91,40 @@ export async function createTransactionLink(args: {
   const { leftId, rightId, linkType, amount = null, note = null } = args;
 
   if (!leftId || !rightId) throw new Error("Two transaction IDs are required");
-  if (leftId === rightId)
-    throw new Error("Cannot link a transaction to itself");
+  if (leftId === rightId) throw new Error("Cannot link a transaction to itself");
 
-  // 1. Fetch the transactions to check if we need to auto-balance
-  const { data: txs } = await supabase
-    .from("transactions")
-    .select("id, amount, account_id, date, description, accounts(type)")
-    .in("id", [leftId, rightId]);
+  const txs = await sql`
+    SELECT t.id, t.amount, t.account_id, t.date, t.description,
+           json_build_object('type', a.type) AS accounts
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
+    WHERE t.id = ANY(${[leftId, rightId]})
+  `;
 
-  if (!txs || txs.length !== 2) throw new Error("Transactions not found");
+  if (txs.length !== 2) throw new Error("Transactions not found");
 
-  const [t1, t2] = txs;
+  const [t1, t2] = txs as any[];
 
-  // 2. SMART LOGIC: Handle "Settlement" of Debt
-  // If both are negative (Expense + Payment), we need a positive Credit to zero out the debt.
   if (linkType === "settlement" && t1.amount < 0 && t2.amount < 0) {
-    // Heuristic: The transaction with the EARLIER date is usually the Debt (Purchase),
-    // and the LATER date is the Payment.
     const purchase = t1.date < t2.date ? t1 : t2;
     const payment = t1.date < t2.date ? t2 : t1;
 
-    // Create the "Credit" entry on the Purchase Account (e.g. Klarna)
-    const { error: insertErr } = await supabase.from("transactions").insert({
-      account_id: purchase.account_id, // Add money back to Klarna
-      date: payment.date, // On the day we paid
-      amount: Math.abs(payment.amount), // The positive version (+49.90)
-      amount_eur: Math.abs(payment.amount), // Simplify currency logic for now
-      description: `Payment Received (Settlement)`,
-      category: "Transfer", // Mark as transfer so it doesn't look like Income
-      is_manual: true,
-      original_currency: "EUR", // Ideally fetch account currency, assuming EUR for now
-    });
-
-    if (insertErr)
-      throw new Error("Failed to create balancing credit transaction");
+    await sql`
+      INSERT INTO transactions (account_id, date, amount, amount_eur, description, category, is_manual, original_currency)
+      VALUES (
+        ${purchase.account_id}, ${payment.date},
+        ${Math.abs(payment.amount)}, ${Math.abs(payment.amount)},
+        'Payment Received (Settlement)', 'Transfer', true, 'EUR'
+      )
+    `;
   }
 
-  // 3. Create the Link (Standard Logic)
-  // Store deterministically (lowest ID first) to match UNIQUE constraints if you have them
   const [a, b] = [leftId, rightId].sort();
 
-  const { error } = await supabase.from("transaction_links").insert({
-    left_transaction_id: a,
-    right_transaction_id: b,
-    link_type: linkType,
-    amount,
-    note,
-  });
-
-  if (error) throw new Error(error.message);
+  await sql`
+    INSERT INTO transaction_links (left_transaction_id, right_transaction_id, link_type, amount, note)
+    VALUES (${a}, ${b}, ${linkType}, ${amount}, ${note})
+  `;
 
   revalidatePath("/transactions");
   revalidatePath("/");
@@ -191,18 +132,12 @@ export async function createTransactionLink(args: {
 
 export async function deleteTransactionLink(linkId: string) {
   if (!linkId) return;
-
-  const { error } = await supabase
-    .from("transaction_links")
-    .delete()
-    .eq("id", linkId);
-
-  if (error) throw new Error(error.message);
-
+  await sql`DELETE FROM transaction_links WHERE id = ${linkId}`;
   revalidatePath("/transactions");
   revalidatePath("/");
 }
-// --- Forecast helpers (Step 2B) ---------------------------------------------
+
+// --- Forecast helpers ---
 type ForecastPlan =
   | { kind: "none" }
   | { kind: "pay30" }
@@ -226,9 +161,7 @@ function addMonthsClamped(dateISO: string, monthsToAdd: number) {
   const targetYear = year + Math.floor(targetMonthIndex / 12);
   const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
 
-  const lastDay = new Date(
-    Date.UTC(targetYear, targetMonth + 1, 0),
-  ).getUTCDate();
+  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
   const clampedDay = Math.min(day, lastDay);
 
   return toISODateOnly(new Date(Date.UTC(targetYear, targetMonth, clampedDay)));
@@ -242,28 +175,20 @@ export async function updateTransactionWithForecast(
     category: string;
     amount: number;
     amount_eur?: number | null;
-    date: string; // ISO string
+    date: string;
   },
   plan: ForecastPlan,
 ) {
   if (!transactionId) throw new Error("transactionId is required");
 
-  // 1) Update transaction
-  const { error: upErr } = await supabase
-    .from("transactions")
-    .update({
-      account_id: updated.account_id,
-      description: updated.description,
-      category: updated.category,
-      amount: updated.amount,
-      amount_eur: updated.amount_eur ?? null,
-      date: updated.date,
-    })
-    .eq("id", transactionId);
+  await sql`
+    UPDATE transactions
+    SET account_id = ${updated.account_id}, description = ${updated.description},
+        category = ${updated.category}, amount = ${updated.amount},
+        amount_eur = ${updated.amount_eur ?? null}, date = ${updated.date}
+    WHERE id = ${transactionId}
+  `;
 
-  if (upErr) throw new Error(upErr.message);
-
-  // 2) If no forecast planned, done
   if (!plan || plan.kind === "none") {
     revalidatePath("/transactions");
     revalidatePath("/forecast");
@@ -273,48 +198,29 @@ export async function updateTransactionWithForecast(
 
   const category = (updated.category ?? "").trim() || "Uncategorized";
   const amount = Number(updated.amount_eur ?? updated.amount);
-  const baseDateISO = updated.date; // must be parseable by Date()
+  const baseDateISO = updated.date;
 
   if (plan.kind === "pay30") {
     const dueDate = addDaysISO(baseDateISO, 30);
 
-    // 1. Create or Update the Rule using Upsert on the unique source_transaction_id
-    const { data: rule, error: rErr } = await supabase
-      .from("forecast_rules")
-      .upsert(
-        {
-          source_transaction_id: transactionId,
-          name: `Pay in 30 — ${updated.description ?? "Transaction"}`,
-          type: "one_off",
-          account_id: updated.account_id,
-          category: category,
-          amount: amount,
-          currency: "EUR",
-          start_date: dueDate,
-          end_date: dueDate,
-          is_active: true,
-        },
-        { onConflict: "source_transaction_id" }, // Requires the SQL constraint above
-      )
-      .select("id")
-      .single();
+    const [rule] = await sql`
+      INSERT INTO forecast_rules
+        (source_transaction_id, name, type, account_id, category, amount, currency, start_date, end_date, is_active)
+      VALUES
+        (${transactionId}, ${"Pay in 30 — " + (updated.description ?? "Transaction")},
+         'one_off', ${updated.account_id}, ${category}, ${amount}, 'EUR', ${dueDate}, ${dueDate}, true)
+      ON CONFLICT (source_transaction_id) DO UPDATE SET
+        name = EXCLUDED.name, type = EXCLUDED.type, account_id = EXCLUDED.account_id,
+        category = EXCLUDED.category, amount = EXCLUDED.amount, start_date = EXCLUDED.start_date,
+        end_date = EXCLUDED.end_date, is_active = EXCLUDED.is_active
+      RETURNING id
+    `;
 
-    if (rErr) throw new Error(rErr.message);
-
-    // 2. Upsert the instance
-    const { error: iErr } = await supabase.from("forecast_instances").upsert(
-      [
-        {
-          rule_id: rule.id,
-          date: dueDate,
-          amount,
-          status: "projected",
-          transaction_id: null,
-          note: `Created from transaction ${transactionId}`, // Keep for Pay in 30 (Specific link)
-        },
-      ],
-      { onConflict: "rule_id,date" },
-    );
+    await sql`
+      INSERT INTO forecast_instances (rule_id, date, amount, status, transaction_id, note)
+      VALUES (${rule.id}, ${dueDate}, ${amount}, 'projected', null, ${"Created from transaction " + transactionId})
+      ON CONFLICT (rule_id, date) DO NOTHING
+    `;
   }
 
   if (plan.kind === "repeat_monthly") {
@@ -322,39 +228,24 @@ export async function updateTransactionWithForecast(
     const firstDate = addMonthsClamped(baseDateISO, 1);
     const dom = new Date(baseDateISO).getUTCDate();
 
-    // Try to reuse existing rule
-    const { data: existing, error: exErr } = await supabase
-      .from("forecast_rules")
-      .select("id")
-      .eq("source_transaction_id", transactionId)
-      .eq("type", "recurring")
-      .maybeSingle();
-
-    if (exErr) throw new Error(exErr.message);
+    const [existing] = await sql`
+      SELECT id FROM forecast_rules
+      WHERE source_transaction_id = ${transactionId} AND type = 'recurring'
+    `;
 
     let ruleId = existing?.id;
 
     if (!ruleId) {
-      const { data: created, error: rErr } = await supabase
-        .from("forecast_rules")
-        .insert({
-          source_transaction_id: transactionId, // IMPORTANT: We link the Rule to the Source (for lineage)
-          name: `Monthly — ${updated.description ?? "Transaction"}`,
-          type: "recurring",
-          account_id: updated.account_id,
-          category,
-          amount,
-          currency: "EUR",
-          start_date: firstDate,
-          end_date: null,
-          frequency: "monthly",
-          day_of_month: dom,
-          is_active: true,
-        })
-        .select("id")
-        .single();
-
-      if (rErr) throw new Error(rErr.message);
+      const [created] = await sql`
+        INSERT INTO forecast_rules
+          (source_transaction_id, name, type, account_id, category, amount, currency,
+           start_date, end_date, frequency, day_of_month, is_active)
+        VALUES
+          (${transactionId}, ${"Monthly — " + (updated.description ?? "Transaction")},
+           'recurring', ${updated.account_id}, ${category}, ${amount}, 'EUR',
+           ${firstDate}, null, 'monthly', ${dom}, true)
+        RETURNING id
+      `;
       ruleId = created.id;
     }
 
@@ -362,17 +253,15 @@ export async function updateTransactionWithForecast(
       rule_id: ruleId,
       date: addMonthsClamped(firstDate, i),
       amount,
-      status: "projected" as const,
+      status: "projected",
       transaction_id: null,
-      note: null, // <--- FIXED: No "Created from..." note for recurring future items
+      note: null,
     }));
 
-    // Upsert to avoid duplicates on re-save
-    const { error: iErr } = await supabase
-      .from("forecast_instances")
-      .upsert(instances, { onConflict: "rule_id,date" });
-
-    if (iErr) throw new Error(iErr.message);
+    await sql`
+      INSERT INTO forecast_instances ${sql(instances)}
+      ON CONFLICT (rule_id, date) DO NOTHING
+    `;
   }
 
   revalidatePath("/transactions");

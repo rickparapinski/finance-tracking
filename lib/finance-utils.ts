@@ -1,5 +1,5 @@
 // lib/finance-utils.ts
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 
 // --- 1. DATE & CYCLE LOGIC ---
 
@@ -95,21 +95,15 @@ export function getCurrentCycle() {
 // --- UPDATED: DB-AWARE FETCH ---
 
 export async function fetchCurrentCycle() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
-
   const now = new Date();
   const nowStr = now.toISOString().split("T")[0];
 
   // 1. Try to find a custom cycle that explicitly contains "today"
-  const { data: activeCycle } = await supabase
-    .from("cycles")
-    .select("*")
-    .lte("start_date", nowStr)
-    .gte("end_date", nowStr)
-    .maybeSingle();
+  const [activeCycle] = await sql`
+    SELECT * FROM cycles
+    WHERE start_date <= ${nowStr} AND end_date >= ${nowStr}
+    LIMIT 1
+  `;
 
   if (activeCycle) {
     const start = new Date(activeCycle.start_date);

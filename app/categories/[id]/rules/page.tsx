@@ -1,11 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import { createRule, deleteRule, updateRule } from "./actions";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
 
 export const revalidate = 0;
 
@@ -16,18 +11,13 @@ export default async function CategoryRulesPage({
 }) {
   const { id: categoryId } = await params;
 
-  const { data: category } = await supabase
-    .from("categories")
-    .select("*")
-    .eq("id", categoryId)
-    .single();
+  const [category] = await sql`SELECT * FROM categories WHERE id = ${categoryId}`;
 
-  const { data: rules } = await supabase
-    .from("category_rules")
-    .select("*")
-    .eq("category_id", categoryId)
-    .order("priority", { ascending: true })
-    .order("pattern", { ascending: true });
+  const rules = await sql`
+    SELECT * FROM category_rules
+    WHERE category_id = ${categoryId}
+    ORDER BY priority ASC, pattern ASC
+  `;
 
   return (
     <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-8">
@@ -38,8 +28,7 @@ export default async function CategoryRulesPage({
               Rules
             </h1>
             <p className="text-sm text-slate-500">
-              Auto-categorize by matching keywords in the transaction
-              description.
+              Auto-categorize by matching keywords in the transaction description.
             </p>
           </div>
           <Link
@@ -57,7 +46,6 @@ export default async function CategoryRulesPage({
         )}
       </header>
 
-      {/* Add rule */}
       <section className="rounded-[var(--radius)] bg-white p-6 shadow-[var(--shadow-softer)] space-y-4">
         <h2 className="text-sm font-semibold text-slate-900">Add rule</h2>
         <form action={createRule} className="flex flex-wrap gap-3 items-end">
@@ -86,7 +74,6 @@ export default async function CategoryRulesPage({
             />
           </div>
 
-          {/* NEW CHECKBOX */}
           <div className="flex items-center h-10 pb-1">
             <label className="inline-flex items-center gap-2 text-xs text-slate-600 cursor-pointer select-none">
               <input
@@ -110,7 +97,6 @@ export default async function CategoryRulesPage({
         </p>
       </section>
 
-      {/* Rules list */}
       <section className="rounded-[var(--radius)] bg-white shadow-[var(--shadow-softer)] overflow-hidden">
         <div className="bg-slate-50 border-b border-slate-100 px-6 py-3">
           <div className="grid grid-cols-12 gap-4 text-xs font-semibold text-slate-600">
@@ -122,15 +108,9 @@ export default async function CategoryRulesPage({
         </div>
 
         <div className="divide-y divide-slate-100">
-          {rules?.map((r) => (
-            <div
-              key={r.id}
-              className="px-6 py-4 hover:bg-slate-50 transition-colors"
-            >
-              <form
-                action={updateRule}
-                className="grid grid-cols-12 gap-4 items-center"
-              >
+          {rules.map((r: any) => (
+            <div key={r.id} className="px-6 py-4 hover:bg-slate-50 transition-colors">
+              <form action={updateRule} className="grid grid-cols-12 gap-4 items-center">
                 <input type="hidden" name="category_id" value={categoryId} />
                 <input type="hidden" name="id" value={r.id} />
 
@@ -153,11 +133,7 @@ export default async function CategoryRulesPage({
 
                 <div className="col-span-2 text-sm text-slate-600">
                   <label className="inline-flex items-center gap-2">
-                    <input
-                      name="is_active"
-                      type="checkbox"
-                      defaultChecked={r.is_active}
-                    />
+                    <input name="is_active" type="checkbox" defaultChecked={r.is_active} />
                     Active
                   </label>
                 </div>
@@ -166,7 +142,6 @@ export default async function CategoryRulesPage({
                   <button className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 transition">
                     Save
                   </button>
-
                   <button
                     formAction={deleteRule}
                     className="rounded-md px-2 py-1 text-xs font-medium text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
@@ -178,7 +153,7 @@ export default async function CategoryRulesPage({
             </div>
           ))}
 
-          {(!rules || rules.length === 0) && (
+          {rules.length === 0 && (
             <div className="px-6 py-10 text-sm text-slate-500">
               No rules yet. Add your first keyword above.
             </div>

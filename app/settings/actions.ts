@@ -1,61 +1,46 @@
 "use server";
 
-import { createClient } from "@supabase/supabase-js";
+import { sql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
-
 export type CycleConfig = {
-  key: string; // "2026-01"
+  key: string;
   start_date: string;
   end_date: string;
 };
 
 export async function upsertCycle(cycle: CycleConfig) {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+  await sql`
+    INSERT INTO cycles (key, start_date, end_date)
+    VALUES (${cycle.key}, ${cycle.start_date}, ${cycle.end_date})
+    ON CONFLICT (key) DO UPDATE SET start_date = EXCLUDED.start_date, end_date = EXCLUDED.end_date
+  `;
 
-  const { error } = await supabase
-    .from("cycles")
-    .upsert({
-      key: cycle.key,
-      start_date: cycle.start_date,
-      end_date: cycle.end_date,
-    })
-    .select();
+  // Clean up projected budget instances so they regenerate with new dates
+  const budgetRuleIds = await sql`SELECT id FROM forecast_rules WHERE type = 'budget'`;
+  const ids = budgetRuleIds.map((r) => r.id);
 
-  if (error) throw new Error(error.message);
+  if (ids.length > 0) {
+    await sql`
+      DELETE FROM forecast_instances
+      WHERE status = 'projected' AND rule_id = ANY(${ids})
+    `;
+  }
 
-  // --- NEW: Clean up projected items so they regenerate with new dates ---
-  // We delete all 'projected' budget instances.
-  // Realized items (ones you marked as paid) are safe.
-  await supabase
-    .from("forecast_instances")
-    .delete()
-    .eq("status", "projected")
-    .in(
-      "rule_id",
-      (
-        await supabase.from("forecast_rules").select("id").eq("type", "budget")
-      ).data?.map((r) => r.id) || [],
-    );
-
-  // Refresh data across the app
   revalidatePath("/");
   revalidatePath("/forecast");
   revalidatePath("/settings");
 }
 
 export async function getCustomCycles() {
-  const { data } = await supabase
-    .from("cycles")
-    .select("*")
-    .order("key", { ascending: true });
+  const data = await sql`SELECT * FROM cycles ORDER BY key ASC`;
+  return data;
+}
 
-  return data || [];
+export async function resetData() {
+  const tables = ["transaction_links", "forecast_instances", "transactions", "accounts", "cycles"];
+  for (const table of tables) {
+    await sql`DELETE FROM ${sql(table)}`;
+  }
+  revalidatePath("/", "layout");
 }
