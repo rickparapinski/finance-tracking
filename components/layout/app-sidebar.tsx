@@ -108,7 +108,8 @@ export function AppSidebar({ accounts }: SidebarProps) {
                 {new Intl.NumberFormat("de-DE", {
                   style: "currency",
                   currency: acc.currency,
-                  maximumFractionDigits: 0,
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
                 }).format(acc.balance)}
               </span>
             </div>

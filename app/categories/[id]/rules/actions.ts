@@ -59,6 +59,14 @@ export async function updateRule(formData: FormData) {
   revalidatePath(`/categories/${categoryId}/rules`);
 }
 
+export async function countMatchingUncategorized(pattern: string): Promise<number> {
+  const [row] = await sql`
+    SELECT COUNT(*) AS count FROM transactions
+    WHERE category = 'Uncategorized' AND description ILIKE ${"%" + pattern + "%"}
+  `;
+  return Number(row?.count ?? 0);
+}
+
 export async function deleteRule(formData: FormData) {
   const categoryId = String(
     formData.get("category_id") ?? formData.get("categoryId") ?? "",

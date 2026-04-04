@@ -23,13 +23,15 @@ export const parseRevolut = (file: File): Promise<NormalizedTransaction[]> => {
           const datePart = row["Started Date"].split(" ")[0];
 
           // 5. Map fields
+          const amount = parseFloat(row["Amount"]) - parseFloat(row["Fee"] || "0");
+          if (amount === 0) return; // skip zero-amount rows (e.g. fee-only charges with Amount=0)
+
           transactions.push({
             date: datePart,
-            amount: parseFloat(row["Amount"]),
+            amount,
             description: row["Description"],
             currency: row["Currency"],
-            // CHANGE THIS LINE:
-            category: "", // Leave empty to allow db-loader to apply your rules
+            category: "",
           });
         });
 

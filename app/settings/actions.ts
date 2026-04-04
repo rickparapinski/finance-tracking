@@ -38,7 +38,7 @@ export async function getCustomCycles() {
 }
 
 export async function resetData() {
-  const tables = ["transaction_links", "forecast_instances", "transactions", "accounts", "cycles"];
+  const tables = ["transaction_links", "forecast_instances", "forecast_rules", "transactions", "accounts", "cycles"];
   for (const table of tables) {
     await sql`DELETE FROM ${sql(table)}`;
   }
