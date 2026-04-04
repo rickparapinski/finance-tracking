@@ -10,6 +10,14 @@ export const sql = globalThis._sql ?? postgres(process.env.DATABASE_URL!, {
   max: 10,
   idle_timeout: 20,
   connect_timeout: 10,
+  types: {
+    date: {
+      to: 1082,
+      from: [1082],
+      serialize: (x: string) => x,
+      parse: (x: string) => x, // return dates as YYYY-MM-DD strings, same as Supabase did
+    },
+  },
 });
 
 if (process.env.NODE_ENV !== "production") {
