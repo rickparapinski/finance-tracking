@@ -91,8 +91,9 @@ export function AppSidebar({ accounts }: SidebarProps) {
 
         <div className="space-y-1">
           {accounts.map((acc) => (
-            <div
+            <Link
               key={acc.id}
+              href={`/accounts/${acc.id}`}
               className="group flex items-center justify-between px-3 py-2 rounded-md hover:bg-muted transition-colors text-sm"
             >
               <div className="flex items-center gap-3 overflow-hidden">
@@ -112,7 +113,7 @@ export function AppSidebar({ accounts }: SidebarProps) {
                   maximumFractionDigits: 2,
                 }).format(acc.balance)}
               </span>
-            </div>
+            </Link>
           ))}
 
           {accounts.length === 0 && (

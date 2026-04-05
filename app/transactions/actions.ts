@@ -137,6 +137,57 @@ export async function deleteTransactionLink(linkId: string) {
   revalidatePath("/");
 }
 
+export async function createTransferCounterpart(
+  sourceTransactionId: string,
+  targetAccountId: string,
+) {
+  if (!sourceTransactionId || !targetAccountId)
+    throw new Error("Source transaction and target account are required");
+
+  const [source] = await sql`
+    SELECT * FROM transactions WHERE id = ${sourceTransactionId}
+  `;
+  if (!source) throw new Error("Source transaction not found");
+
+  const [targetAccount] = await sql`
+    SELECT currency FROM accounts WHERE id = ${targetAccountId}
+  `;
+  if (!targetAccount) throw new Error("Target account not found");
+
+  // Check if a transfer counterpart already exists for this transaction
+  const existing = await sql`
+    SELECT tl.id FROM transaction_links tl
+    WHERE (tl.left_transaction_id = ${sourceTransactionId} OR tl.right_transaction_id = ${sourceTransactionId})
+      AND tl.link_type = 'transfer'
+  `;
+  if (existing.length > 0)
+    throw new Error(
+      "A transfer counterpart already exists for this transaction",
+    );
+
+  const counterAmount = -Number(source.amount);
+  const counterAmountEur =
+    source.amount_eur != null ? -Number(source.amount_eur) : null;
+
+  const [counterTx] = await sql`
+    INSERT INTO transactions (account_id, date, amount, amount_eur, description, category, original_currency, is_manual)
+    VALUES (
+      ${targetAccountId}, ${source.date}, ${counterAmount}, ${counterAmountEur},
+      ${source.description ?? "Transfer"}, ${"Transfer"}, ${targetAccount.currency}, true
+    )
+    RETURNING id
+  `;
+
+  const [a, b] = [sourceTransactionId, counterTx.id].sort();
+  await sql`
+    INSERT INTO transaction_links (left_transaction_id, right_transaction_id, link_type, amount)
+    VALUES (${a}, ${b}, 'transfer', ${Math.abs(Number(source.amount_eur ?? source.amount))})
+  `;
+
+  revalidatePath("/transactions");
+  revalidatePath("/");
+}
+
 // --- Forecast helpers ---
 type ForecastPlan =
   | { kind: "none" }

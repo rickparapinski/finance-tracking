@@ -10,8 +10,14 @@ export type Account = {
   currency: string;
   type: string;
   initial_balance: number;
+  balance?: number;
   status?: "active" | "archived";
-  nature?: "asset" | "liability"; // Added for type safety
+  nature?: "asset" | "liability";
+  color?: string | null;
+  credit_limit?: number | null;
+  interest_rate?: number | null;
+  loan_original_amount?: number | null;
+  monthly_payment?: number | null;
 };
 
 interface EditAccountModalProps {
@@ -20,23 +26,16 @@ interface EditAccountModalProps {
   onClose: () => void;
 }
 
-// Define options here to match Server Action
 const TYPE_OPTIONS = [
-  { label: "Checking", nature: "asset" },
-  { label: "Savings", nature: "asset" },
-  { label: "Investment", nature: "asset" },
+  { label: "Checking",    nature: "asset"     },
+  { label: "Savings",     nature: "asset"     },
+  { label: "Investment",  nature: "asset"     },
   { label: "Credit Card", nature: "liability" },
-  { label: "Loan", nature: "liability" },
+  { label: "Loan",        nature: "liability" },
 ];
 
-export function EditAccountModal({
-  account,
-  isOpen,
-  onClose,
-}: EditAccountModalProps) {
+export function EditAccountModal({ account, isOpen, onClose }: EditAccountModalProps) {
   const [isLoading, setIsLoading] = useState(false);
-
-  // Track selected type to show the correct Nature badge dynamically
   const [selectedType, setSelectedType] = useState(account?.type || "Checking");
 
   if (!isOpen) return null;
@@ -48,15 +47,14 @@ export function EditAccountModal({
     onClose();
   };
 
-  // Determine current nature based on selection
-  const currentNature =
-    TYPE_OPTIONS.find((t) => t.label === selectedType)?.nature || "asset";
+  const currentNature = TYPE_OPTIONS.find((t) => t.label === selectedType)?.nature || "asset";
   const isLiability = currentNature === "liability";
+  const isCreditCard = selectedType === "Credit Card";
+  const isLoan = selectedType === "Loan";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-white rounded-[var(--radius)] shadow-[var(--shadow-soft)] w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-        {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
           <h2 className="text-base font-semibold text-slate-900">
             {account ? "Edit account" : "New account"}
@@ -69,14 +67,11 @@ export function EditAccountModal({
           </button>
         </div>
 
-        {/* Form */}
-        <form action={handleSave} className="p-6 space-y-4">
+        <form action={handleSave} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
           <input type="hidden" name="id" value={account?.id || ""} />
 
           <div>
-            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
-              Name
-            </label>
+            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Name</label>
             <input
               name="name"
               required
@@ -88,9 +83,7 @@ export function EditAccountModal({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
-                Currency
-              </label>
+              <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Currency</label>
               <select
                 name="currency"
                 defaultValue={account?.currency || "EUR"}
@@ -103,9 +96,7 @@ export function EditAccountModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
-                Type
-              </label>
+              <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Type</label>
               <select
                 name="type"
                 value={selectedType}
@@ -113,15 +104,12 @@ export function EditAccountModal({
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
               >
                 {TYPE_OPTIONS.map((opt) => (
-                  <option key={opt.label} value={opt.label}>
-                    {opt.label}
-                  </option>
+                  <option key={opt.label} value={opt.label}>{opt.label}</option>
                 ))}
               </select>
             </div>
           </div>
 
-          {/* Dynamic Badge showing the impact */}
           <div
             className={`text-xs px-3 py-2 rounded-lg border ${
               isLiability
@@ -129,9 +117,7 @@ export function EditAccountModal({
                 : "bg-emerald-50 text-emerald-700 border-emerald-100"
             }`}
           >
-            <span className="font-semibold">
-              {isLiability ? "Liability" : "Asset"}:
-            </span>{" "}
+            <span className="font-semibold">{isLiability ? "Liability" : "Asset"}:</span>{" "}
             {isLiability
               ? "Positive balance counts as debt (negative Net Worth)."
               : "Positive balance counts as money you own."}
@@ -139,7 +125,7 @@ export function EditAccountModal({
 
           <div>
             <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
-              Start Balance
+              {isLoan ? "Current Balance (what you currently owe, negative)" : "Start Balance"}
             </label>
             <input
               name="initial_balance"
@@ -152,6 +138,92 @@ export function EditAccountModal({
               Current balance will be calculated from this + transactions.
             </p>
           </div>
+
+          {/* Credit Card specific */}
+          {isCreditCard && (
+            <div className="space-y-4 rounded-xl border border-slate-100 p-4 bg-slate-50">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Credit Card Settings</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
+                    Credit Limit
+                  </label>
+                  <input
+                    name="credit_limit"
+                    type="number"
+                    step="0.01"
+                    defaultValue={account?.credit_limit ?? ""}
+                    placeholder="e.g. 2000"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
+                    Annual Interest %
+                  </label>
+                  <input
+                    name="interest_rate"
+                    type="number"
+                    step="0.01"
+                    defaultValue={account?.interest_rate ?? ""}
+                    placeholder="e.g. 19.99"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Annual rate — used to estimate monthly interest charge.</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Loan specific */}
+          {isLoan && (
+            <div className="space-y-4 rounded-xl border border-slate-100 p-4 bg-slate-50">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Loan Settings</p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
+                    Original Amount
+                  </label>
+                  <input
+                    name="loan_original_amount"
+                    type="number"
+                    step="0.01"
+                    defaultValue={account?.loan_original_amount ?? ""}
+                    placeholder="e.g. 1000"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Total amount borrowed.</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
+                    Monthly Payment
+                  </label>
+                  <input
+                    name="monthly_payment"
+                    type="number"
+                    step="0.01"
+                    defaultValue={account?.monthly_payment ?? ""}
+                    placeholder="e.g. 50"
+                    className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">Used to estimate payoff date.</p>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
+                  Annual Interest %
+                </label>
+                <input
+                  name="interest_rate"
+                  type="number"
+                  step="0.01"
+                  defaultValue={account?.interest_rate ?? ""}
+                  placeholder="e.g. 12.5"
+                  className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
+                />
+              </div>
+            </div>
+          )}
 
           <div className="pt-4 flex justify-end gap-2">
             <button

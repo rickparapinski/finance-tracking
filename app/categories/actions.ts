@@ -55,6 +55,34 @@ async function syncBudgetRule(
   }
 }
 
+export async function getSpendingForCycle(
+  startDate: string,
+  endDate: string,
+): Promise<Record<string, number>> {
+  const rows = await sql`
+    SELECT category, SUM(ABS(amount_eur)) AS total
+    FROM transactions
+    WHERE date >= ${startDate} AND date <= ${endDate} AND amount < 0
+    GROUP BY category
+  `;
+  return Object.fromEntries(rows.map((r: any) => [r.category, Number(r.total)]));
+}
+
+export async function getCategoryTransactions(
+  categoryName: string,
+  startDate: string,
+  endDate: string,
+) {
+  return await sql`
+    SELECT t.*, json_build_object('name', a.name) AS accounts
+    FROM transactions t
+    LEFT JOIN accounts a ON t.account_id = a.id
+    WHERE t.category = ${categoryName}
+      AND t.date >= ${startDate} AND t.date <= ${endDate}
+    ORDER BY t.date DESC
+  `;
+}
+
 export async function createCategory(formData: FormData) {
   const name = String(formData.get("name") || "").trim();
   const type = String(formData.get("type") || "expense");

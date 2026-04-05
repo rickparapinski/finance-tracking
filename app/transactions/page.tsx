@@ -153,6 +153,7 @@ export default async function TransactionsPage() {
           columns={columns}
           data={transactions as any}
           categories={categories.map((c: any) => c.name)}
+          accounts={accounts.map((a: any) => ({ id: a.id, name: a.name }))}
           uncategorizedCount={uncategorizedCount}
         />
       )}

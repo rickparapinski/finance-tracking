@@ -52,6 +52,8 @@ export default async function Dashboard() {
   const categoryTotals: Record<string, number> = {};
 
   cycleTransactions.forEach((t) => {
+    if (t.category === "Transfer") return;
+
     const val = Number(t.amount_eur ?? t.amount);
 
     if (val < 0) {
@@ -87,7 +89,7 @@ export default async function Dashboard() {
   const spentThisCycle = totalExpense;
 
   return (
-    <div className="p-6 md:p-10 space-y-10">
+    <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-8">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
           Overview
@@ -136,7 +138,7 @@ export default async function Dashboard() {
           </CardContent>
         </Card>
       </div>
-    </div>
+    </main>
   );
 }
 
