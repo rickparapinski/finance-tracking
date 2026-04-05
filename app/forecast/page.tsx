@@ -195,7 +195,7 @@ export default async function ForecastPage({
   });
 
   return (
-    <div className="min-h-screen p-8 max-w-6xl mx-auto space-y-6">
+    <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-8">
       <div className="flex items-end justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold text-slate-900">Forecast</h1>
@@ -234,6 +234,6 @@ export default async function ForecastPage({
       />
 
       <ForecastTable rows={rowsWithBalance} detailsByMonth={detailsByMonth} />
-    </div>
+    </main>
   );
 }

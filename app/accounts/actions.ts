@@ -24,16 +24,28 @@ export async function upsertAccount(formData: FormData) {
   const initial_balance =
     parseFloat((formData.get("initial_balance") as string) || "0") || 0;
 
+  const credit_limit =
+    parseFloat((formData.get("credit_limit") as string) || "0") || null;
+  const interest_rate =
+    parseFloat((formData.get("interest_rate") as string) || "0") || null;
+  const loan_original_amount =
+    parseFloat((formData.get("loan_original_amount") as string) || "0") || null;
+  const monthly_payment =
+    parseFloat((formData.get("monthly_payment") as string) || "0") || null;
+
   if (id) {
     await sql`
       UPDATE accounts
-      SET name = ${name}, currency = ${currency}, type = ${type}, nature = ${nature}, initial_balance = ${initial_balance}
+      SET name = ${name}, currency = ${currency}, type = ${type}, nature = ${nature},
+          initial_balance = ${initial_balance},
+          credit_limit = ${credit_limit}, interest_rate = ${interest_rate},
+          loan_original_amount = ${loan_original_amount}, monthly_payment = ${monthly_payment}
       WHERE id = ${id}
     `;
   } else {
     await sql`
-      INSERT INTO accounts (name, currency, type, nature, initial_balance)
-      VALUES (${name}, ${currency}, ${type}, ${nature}, ${initial_balance})
+      INSERT INTO accounts (name, currency, type, nature, initial_balance, credit_limit, interest_rate, loan_original_amount, monthly_payment)
+      VALUES (${name}, ${currency}, ${type}, ${nature}, ${initial_balance}, ${credit_limit}, ${interest_rate}, ${loan_original_amount}, ${monthly_payment})
     `;
   }
 

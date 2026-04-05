@@ -32,7 +32,7 @@ export async function createRule(formData: FormData) {
     }
   }
 
-  revalidatePath(`/categories/${categoryId}/rules`);
+  revalidatePath(`/categories/${categoryId}`);
   revalidatePath("/transactions");
 }
 
@@ -56,7 +56,7 @@ export async function updateRule(formData: FormData) {
     WHERE id = ${id}
   `;
 
-  revalidatePath(`/categories/${categoryId}/rules`);
+  revalidatePath(`/categories/${categoryId}`);
 }
 
 export async function countMatchingUncategorized(pattern: string): Promise<number> {
@@ -78,5 +78,5 @@ export async function deleteRule(formData: FormData) {
 
   await sql`DELETE FROM category_rules WHERE id = ${id}`;
 
-  revalidatePath(`/categories/${categoryId}/rules`);
+  revalidatePath(`/categories/${categoryId}`);
 }

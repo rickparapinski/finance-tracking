@@ -8,7 +8,7 @@ export default async function SettingsPage() {
   const cycles = await getCustomCycles();
 
   return (
-    <main className="p-6 md:p-10 max-w-5xl mx-auto space-y-8">
+    <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-8">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
           Settings

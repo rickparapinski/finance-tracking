@@ -82,7 +82,7 @@ export default function ImportPage() {
   };
 
   return (
-    <div className="p-10 max-w-xl mx-auto font-sans">
+    <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-8">
       <header className="space-y-1">
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
           Import
@@ -156,6 +156,6 @@ export default function ImportPage() {
           )}
         </div>
       </section>
-    </div>
+    </main>
   );
 }

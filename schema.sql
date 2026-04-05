@@ -98,6 +98,12 @@ CREATE TABLE IF NOT EXISTS transaction_links (
   created_at            TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Account extra fields (idempotent migrations)
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS credit_limit      DECIMAL(12,2);
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS interest_rate     DECIMAL(5,2);
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS loan_original_amount DECIMAL(12,2);
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS monthly_payment   DECIMAL(12,2);
+
 -- Useful indexes
 CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_date       ON transactions(date);
