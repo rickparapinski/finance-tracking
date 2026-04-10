@@ -1,23 +1,39 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { createHmac } from "crypto";
 
-function expectedToken() {
+async function expectedToken(): Promise<string> {
   const secret = process.env.APP_SECRET ?? "dev-secret-change-me";
-  return createHmac("sha256", secret).update("authenticated").digest("hex");
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const sig = await crypto.subtle.sign("HMAC", key, enc.encode("authenticated"));
+  return Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Let the login page and Next.js internals through
+  // Always set x-pathname so layout.tsx can read it
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-pathname", pathname);
+
+  // Let login page through without auth check
   if (pathname.startsWith("/login")) {
-    return NextResponse.next();
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   const token = request.cookies.get("auth")?.value;
-  if (token && token === expectedToken()) {
-    return NextResponse.next();
+  const expected = await expectedToken();
+
+  if (token && token === expected) {
+    return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
   const loginUrl = new URL("/login", request.url);
