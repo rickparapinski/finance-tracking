@@ -102,14 +102,15 @@ export default async function ForecastPage({
     fcInRange.filter((f) => f.transaction_id).map((f) => f.transaction_id),
   );
 
-  // Categories that have active forecast rules
-  const ruleCategories = new Set(rules.map((r: any) => r.category).filter(Boolean));
+  // Only recurring/one_off rules need manual linking — budget rules aggregate automatically
+  const linkableCategories = new Set(
+    rules.filter((r: any) => r.type !== "budget").map((r: any) => r.category).filter(Boolean)
+  );
 
   const unmatchedTx = txInRange.filter((tx: any) => {
     if (linkedTxIds.has(tx.id)) return false;
     if (tx.category === "Transfer") return false;
-    // Show if this category has an active forecast rule (it's an "expected" transaction)
-    return ruleCategories.has(tx.category);
+    return linkableCategories.has(tx.category);
   });
 
   const enrichedProjected = relevantForecastInstances
