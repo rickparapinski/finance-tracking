@@ -111,6 +111,12 @@ export async function resetForecast() {
   revalidatePath("/forecast");
 }
 
+export async function clearAllRules() {
+  await sql`DELETE FROM forecast_instances`;
+  await sql`DELETE FROM forecast_rules`;
+  revalidatePath("/forecast");
+}
+
 // --- 3. GENERATION LOGIC ---
 
 export async function generateForecastInstances({
