@@ -70,9 +70,11 @@ function groupItems(items: FcItem[]) {
 export function ForecastTable({
   rows,
   detailsByMonth,
+  openingBalance,
 }: {
   rows: MonthRow[];
   detailsByMonth: Record<string, FcItem[]>;
+  openingBalance: number;
 }) {
   const [openMonth, setOpenMonth] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -221,6 +223,13 @@ export function ForecastTable({
             <th className="px-4 py-3 text-right font-semibold">Projected</th>
             <th className="px-4 py-3 text-right font-semibold">Net</th>
             <th className="px-4 py-3 text-right font-semibold">Closing</th>
+          </tr>
+          <tr className="border-b border-slate-200 bg-indigo-50/60">
+            <td className="px-4 py-2 text-xs font-semibold text-indigo-700">Net Worth (start of year)</td>
+            <td colSpan={4} />
+            <td className={`px-4 py-2 text-right text-xs font-bold tabular-nums ${clsMoneyStrong(openingBalance)}`}>
+              {formatCurrency(openingBalance)}
+            </td>
           </tr>
         </thead>
 

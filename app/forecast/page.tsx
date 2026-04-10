@@ -28,8 +28,8 @@ export default async function ForecastPage({
   const fetchStart = new Date(Date.UTC(year - 1, 10, 1)).toISOString().split("T")[0];
   const fetchEnd = new Date(Date.UTC(year + 1, 2, 1)).toISOString().split("T")[0];
 
-  const [accounts, txInRange, rules, dbCycles, categories] = await Promise.all([
-    sql`SELECT * FROM accounts`,
+  const [accounts, txInRange, rules, dbCycles, categories, allTxHistory] = await Promise.all([
+    sql`SELECT id, name, currency, initial_balance, initial_balance_eur FROM accounts`,
     sql`
       SELECT account_id, amount, amount_eur, date, description, category, id
       FROM transactions
@@ -39,9 +39,23 @@ export default async function ForecastPage({
     sql`SELECT * FROM forecast_rules WHERE is_active = true`,
     sql`SELECT * FROM cycles`,
     sql`SELECT id, name FROM categories ORDER BY name`,
+    sql`SELECT account_id, COALESCE(amount_eur, amount) AS eur_amount FROM transactions`,
   ]);
 
   await generateForecastInstances({ startDate: `${year}-01-01`, horizonMonths: 12 });
+
+  const openingBalance = accounts.reduce((sum: number, acc: any) => {
+    const eurActivity = allTxHistory
+      .filter((t: any) => t.account_id === acc.id)
+      .reduce((s: number, t: any) => s + Number(t.eur_amount), 0);
+    const eurBase =
+      acc.initial_balance_eur != null
+        ? Number(acc.initial_balance_eur)
+        : acc.currency === "EUR"
+        ? Number(acc.initial_balance)
+        : 0;
+    return sum + eurBase + eurActivity;
+  }, 0);
 
   const fcInRange = await sql`
     SELECT * FROM forecast_instances
@@ -69,10 +83,14 @@ export default async function ForecastPage({
     fcInRange.filter((f) => f.transaction_id).map((f) => f.transaction_id),
   );
 
-  const unmatchedTx = txInRange.filter((tx) => {
+  // Categories that have active forecast rules
+  const ruleCategories = new Set(rules.map((r: any) => r.category).filter(Boolean));
+
+  const unmatchedTx = txInRange.filter((tx: any) => {
     if (linkedTxIds.has(tx.id)) return false;
-    if (tx.category && tx.category !== "Uncategorized") return false;
-    return true;
+    if (tx.category === "Transfer") return false;
+    // Show if this category has an active forecast rule (it's an "expected" transaction)
+    return ruleCategories.has(tx.category);
   });
 
   const enrichedProjected = relevantForecastInstances
@@ -186,7 +204,7 @@ export default async function ForecastPage({
     return { key, label, opening: 0, actual, projected, net, closing: net };
   });
 
-  let runningBalance = 0;
+  let runningBalance = openingBalance;
   const rowsWithBalance = tableRows.map((row) => {
     const opening = runningBalance;
     const closing = opening + row.net;
@@ -204,10 +222,10 @@ export default async function ForecastPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <ManageRulesModal rules={rules as any} />
+          <ManageRulesModal rules={rules as any} categories={categories as any} accounts={accounts as any} />
           <AddRuleModal
             categories={categories as any}
-            accountId={accounts.find((a: any) => a.name.includes("Revolut Main"))?.id}
+            accounts={accounts as any}
           />
           <div className="h-6 w-px bg-slate-200 mx-2" />
           <a
@@ -233,7 +251,7 @@ export default async function ForecastPage({
         projectedInstances={enrichedProjected}
       />
 
-      <ForecastTable rows={rowsWithBalance} detailsByMonth={detailsByMonth} />
+      <ForecastTable rows={rowsWithBalance} detailsByMonth={detailsByMonth} openingBalance={openingBalance} />
     </main>
   );
 }

@@ -10,10 +10,12 @@ export type Account = {
   currency: string;
   type: string;
   initial_balance: number;
-  balance?: number;
+  balance?: number;       // native currency
+  balance_eur?: number | null; // EUR equivalent
   status?: "active" | "archived";
   nature?: "asset" | "liability";
   color?: string | null;
+  initial_balance_eur?: number | null;
   credit_limit?: number | null;
   interest_rate?: number | null;
   loan_original_amount?: number | null;
@@ -37,6 +39,7 @@ const TYPE_OPTIONS = [
 export function EditAccountModal({ account, isOpen, onClose }: EditAccountModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedType, setSelectedType] = useState(account?.type || "Checking");
+  const [selectedCurrency, setSelectedCurrency] = useState(account?.currency || "EUR");
 
   if (!isOpen) return null;
 
@@ -86,7 +89,8 @@ export function EditAccountModal({ account, isOpen, onClose }: EditAccountModalP
               <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">Currency</label>
               <select
                 name="currency"
-                defaultValue={account?.currency || "EUR"}
+                value={selectedCurrency}
+                onChange={(e) => setSelectedCurrency(e.target.value)}
                 className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
               >
                 <option value="EUR">EUR</option>
@@ -125,7 +129,7 @@ export function EditAccountModal({ account, isOpen, onClose }: EditAccountModalP
 
           <div>
             <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
-              {isLoan ? "Current Balance (what you currently owe, negative)" : "Start Balance"}
+              {isLoan ? "Current Balance (native currency, negative)" : "Start Balance (native currency)"}
             </label>
             <input
               name="initial_balance"
@@ -134,10 +138,26 @@ export function EditAccountModal({ account, isOpen, onClose }: EditAccountModalP
               defaultValue={account?.initial_balance}
               className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 text-right"
             />
-            <p className="text-[10px] text-slate-400 mt-1 text-right">
-              Current balance will be calculated from this + transactions.
-            </p>
           </div>
+
+          {selectedCurrency !== "EUR" && (
+            <div>
+              <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
+                Start Balance in EUR <span className="normal-case font-normal text-slate-400">(optional)</span>
+              </label>
+              <input
+                name="initial_balance_eur"
+                type="number"
+                step="0.01"
+                defaultValue={account?.initial_balance_eur ?? ""}
+                placeholder="Auto-calculated at today's rate"
+                className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 text-right"
+              />
+              <p className="text-[10px] text-slate-400 mt-1 text-right">
+                Leave blank to auto-calculate using today's exchange rate.
+              </p>
+            </div>
+          )}
 
           {/* Credit Card specific */}
           {isCreditCard && (

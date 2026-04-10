@@ -98,7 +98,12 @@ CREATE TABLE IF NOT EXISTS transaction_links (
   created_at            TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Installment tracking on transactions (idempotent)
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS installment_index INT;
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS installment_total INT;
+
 -- Account extra fields (idempotent migrations)
+ALTER TABLE accounts ADD COLUMN IF NOT EXISTS initial_balance_eur DECIMAL(12,2);
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS credit_limit      DECIMAL(12,2);
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS interest_rate     DECIMAL(5,2);
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS loan_original_amount DECIMAL(12,2);

@@ -11,10 +11,28 @@ export default function AccountsClient({ accounts }: { accounts: Account[] }) {
   const [selected, setSelected] = React.useState<Account | null>(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
 
+  const TYPE_ORDER = ["Checking", "Savings", "Investment", "Credit Card", "Loan"];
+
   const visibleAccounts = React.useMemo(() => {
-    if (showArchived) return accounts;
-    return accounts.filter((a) => (a.status ?? "active") !== "archived");
+    const list = showArchived
+      ? accounts
+      : accounts.filter((a) => (a.status ?? "active") !== "archived");
+    return list.slice().sort(
+      (a, b) =>
+        (TYPE_ORDER.indexOf(a.type) === -1 ? 99 : TYPE_ORDER.indexOf(a.type)) -
+        (TYPE_ORDER.indexOf(b.type) === -1 ? 99 : TYPE_ORDER.indexOf(b.type)),
+    );
   }, [accounts, showArchived]);
+
+  const groups = React.useMemo(() => {
+    const map = new Map<string, Account[]>();
+    for (const acc of visibleAccounts) {
+      const group = map.get(acc.type) ?? [];
+      group.push(acc);
+      map.set(acc.type, group);
+    }
+    return [...map.entries()];
+  }, [visibleAccounts]);
 
   const openEdit = (acc: Account) => {
     setSelected(acc);
@@ -40,18 +58,23 @@ export default function AccountsClient({ accounts }: { accounts: Account[] }) {
         </label>
       </div>
 
-      {visibleAccounts.length === 0 ? (
+      {groups.length === 0 ? (
         <div className="rounded-xl bg-white p-12 text-center text-slate-500 text-sm shadow-[var(--shadow-softer)]">
           No accounts found.
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {visibleAccounts.map((acc) => (
-            <AccountCard
-              key={acc.id}
-              account={acc}
-              onEdit={openEdit}
-            />
+        <div className="space-y-8">
+          {groups.map(([type, accs]) => (
+            <section key={type} className="space-y-3">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                {type}s
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {accs.map((acc) => (
+                  <AccountCard key={acc.id} account={acc} onEdit={openEdit} />
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       )}
@@ -75,9 +98,11 @@ function AccountCard({
   const logo = bankLogo(acc.name);
   const isArchived = (acc.status ?? "active") === "archived";
   const balance = acc.balance ?? Number(acc.initial_balance);
+  const balanceEur = acc.balance_eur;
   const currency = acc.currency || "EUR";
+  const isNonEur = currency !== "EUR";
 
-  const fmt = (n: number, cur = currency) =>
+  const fmt = (n: number, cur = "EUR") =>
     new Intl.NumberFormat("de-DE", {
       style: "currency",
       currency: cur,
@@ -125,21 +150,35 @@ function AccountCard({
              acc.type === "Loan"        ? "Remaining debt" :
                                           "Available balance"}
           </p>
-          <p
-            className={`text-xl font-bold tabular-nums ${
-              acc.nature === "liability" ? "text-rose-600" : "text-slate-900"
-            }`}
-          >
-            {fmt(balance)}
-          </p>
+          {balanceEur != null ? (
+            <>
+              <p className={`text-xl font-bold tabular-nums ${acc.nature === "liability" ? "text-rose-600" : "text-slate-900"}`}>
+                {fmt(balanceEur, "EUR")}
+              </p>
+              {isNonEur && (
+                <p className="text-[11px] text-slate-400 tabular-nums">
+                  {fmt(balance, currency)}
+                </p>
+              )}
+            </>
+          ) : (
+            <>
+              <p className={`text-xl font-bold tabular-nums ${acc.nature === "liability" ? "text-rose-600" : "text-slate-900"}`}>
+                {fmt(balance, currency)}
+              </p>
+              {isNonEur && (
+                <p className="text-[10px] text-amber-500 mt-0.5">Set EUR balance in Edit</p>
+              )}
+            </>
+          )}
         </div>
 
         {/* Type-specific section */}
         {acc.type === "Credit Card" && (
-          <CreditCardSection acc={acc} balance={balance} fmt={fmt} />
+          <CreditCardSection acc={acc} balance={balance} currency={currency} fmt={fmt} />
         )}
         {acc.type === "Loan" && (
-          <LoanSection acc={acc} balance={balance} fmt={fmt} />
+          <LoanSection acc={acc} balance={balance} currency={currency} fmt={fmt} />
         )}
       </div>
 
@@ -180,11 +219,13 @@ function AccountCard({
 function CreditCardSection({
   acc,
   balance,
+  currency,
   fmt,
 }: {
   acc: Account;
   balance: number;
-  fmt: (n: number) => string;
+  currency: string;
+  fmt: (n: number, cur?: string) => string;
 }) {
   const limit = Number(acc.credit_limit ?? 0);
   const used = Math.abs(Math.min(balance, 0)); // balance is negative when owed
@@ -200,8 +241,8 @@ function CreditCardSection({
       {limit > 0 && (
         <>
           <div className="flex justify-between text-[11px] text-slate-500">
-            <span>Used {fmt(used)}</span>
-            <span>Limit {fmt(limit)}</span>
+            <span>Used {fmt(used, currency)}</span>
+            <span>Limit {fmt(limit, currency)}</span>
           </div>
           <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
             <div
@@ -213,13 +254,13 @@ function CreditCardSection({
             />
           </div>
           <p className="text-[11px] text-slate-400">
-            {fmt(available!)} available · {pct}% used
+            {fmt(available!, currency)} available · {pct}% used
           </p>
         </>
       )}
       {monthlyInterest > 0 && (
         <p className="text-[11px] text-amber-600 font-medium">
-          ~{fmt(monthlyInterest)} interest this month
+          ~{fmt(monthlyInterest, currency)} interest this month
         </p>
       )}
     </div>
@@ -229,11 +270,13 @@ function CreditCardSection({
 function LoanSection({
   acc,
   balance,
+  currency,
   fmt,
 }: {
   acc: Account;
   balance: number;
-  fmt: (n: number) => string;
+  currency: string;
+  fmt: (n: number, cur?: string) => string;
 }) {
   const original = Number(acc.loan_original_amount ?? 0);
   const remaining = Math.abs(Math.min(balance, 0));
@@ -254,8 +297,8 @@ function LoanSection({
   return (
     <div className="space-y-2 border-t border-slate-100 pt-3">
       <div className="flex justify-between text-[11px] text-slate-500">
-        <span>Repaid {fmt(repaid)}</span>
-        <span>Total {fmt(original)}</span>
+        <span>Repaid {fmt(repaid, currency)}</span>
+        <span>Total {fmt(original, currency)}</span>
       </div>
       <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
         <div
@@ -264,7 +307,7 @@ function LoanSection({
         />
       </div>
       <div className="flex justify-between text-[11px]">
-        <span className="text-slate-400">{pct}% repaid · {fmt(remaining)} left</span>
+        <span className="text-slate-400">{pct}% repaid · {fmt(remaining, currency)} left</span>
         {payoffLabel && (
           <span className="text-slate-500 font-medium">Est. payoff {payoffLabel}</span>
         )}

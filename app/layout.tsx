@@ -23,24 +23,31 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const accounts = await sql`
-    SELECT id, name, currency, color, initial_balance
+    SELECT id, name, currency, color, initial_balance, initial_balance_eur
     FROM accounts
     ORDER BY name
   `;
 
-  const transactions = await sql`
-    SELECT account_id, amount FROM transactions
+  const txSums = await sql`
+    SELECT account_id,
+           COALESCE(SUM(amount_eur), 0) AS eur_sum
+    FROM transactions
+    GROUP BY account_id
   `;
 
-  const accountsWithBalance = accounts.map((acc) => {
-    const totalActivity =
-      transactions
-        .filter((t) => t.account_id === acc.id)
-        .reduce((sum, t) => sum + Number(t.amount), 0);
+  const eurSumMap: Record<string, number> = {};
+  for (const r of txSums) eurSumMap[r.account_id] = Number(r.eur_sum);
 
+  const accountsWithBalance = accounts.map((acc) => {
+    const eurBase =
+      acc.initial_balance_eur != null
+        ? Number(acc.initial_balance_eur)
+        : acc.currency === "EUR"
+        ? Number(acc.initial_balance)
+        : 0;
     return {
       ...acc,
-      balance: Number(acc.initial_balance) + totalActivity,
+      balance: eurBase + (eurSumMap[acc.id] ?? 0),
     };
   });
 

@@ -21,11 +21,21 @@ export const columnsForAccount: ColumnDef<Transaction>[] = [
   {
     accessorKey: "description",
     header: "Description",
-    cell: ({ row }) => (
-      <div className="min-w-[220px] text-sm font-medium text-slate-800">
-        {row.original.description}
-      </div>
-    ),
+    cell: ({ row }) => {
+      const { installment_index: idx, installment_total: total } = row.original as any;
+      return (
+        <div className="min-w-[220px] flex items-center gap-2">
+          <span className="text-sm font-medium text-slate-800">
+            {row.original.description}
+          </span>
+          {idx != null && total != null && (
+            <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-600 tabular-nums">
+              {idx}/{total}
+            </span>
+          )}
+        </div>
+      );
+    },
   },
   {
     accessorKey: "category",
@@ -41,7 +51,12 @@ export const columnsForAccount: ColumnDef<Transaction>[] = [
     header: () => <div className="text-right">Amount</div>,
     cell: ({ row }) => {
       const amount = Number((row.original as any).amount);
+      const amountEur = (row.original as any).amount_eur;
       const currency = (row.original as any).original_currency || "EUR";
+      const isNonEur = currency !== "EUR";
+
+      const fmt = (n: number, cur: string) =>
+        new Intl.NumberFormat("de-DE", { style: "currency", currency: cur }).format(n);
 
       return (
         <div className="text-right whitespace-nowrap font-mono">
@@ -54,11 +69,11 @@ export const columnsForAccount: ColumnDef<Transaction>[] = [
               .filter(Boolean)
               .join(" ")}
           >
-            {new Intl.NumberFormat("de-DE", {
-              style: "currency",
-              currency,
-            }).format(amount)}
+            {fmt(amount, currency)}
           </span>
+          {isNonEur && amountEur != null && (
+            <div className="text-[10px] text-slate-400 tabular-nums">{fmt(amountEur, "EUR")}</div>
+          )}
         </div>
       );
     },

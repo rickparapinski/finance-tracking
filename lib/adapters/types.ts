@@ -21,6 +21,8 @@ export interface Transaction {
   category: string; // Cleaned/Smart Category
   account_id: string;
   is_manual: boolean;
+  installment_index?: number | null;
+  installment_total?: number | null;
 }
 
 // Adapter Signature
