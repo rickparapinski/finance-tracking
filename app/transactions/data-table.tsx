@@ -21,7 +21,7 @@ interface DataTableProps {
   data: Transaction[];
   categories: string[];
   accounts: { id: string; name: string }[];
-  allTags: string[];
+  allTags?: string[];
   uncategorizedCount: number;
 }
 
@@ -30,7 +30,7 @@ export function DataTable({
   data,
   categories,
   accounts,
-  allTags,
+  allTags = [],
   uncategorizedCount,
 }: DataTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
