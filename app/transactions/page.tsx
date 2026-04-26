@@ -7,18 +7,19 @@ import Link from "next/link";
 export const revalidate = 0;
 
 export default async function TransactionsPage() {
-  const transactions = await sql`
-    SELECT t.*, json_build_object('name', a.name) AS accounts
-    FROM transactions t
-    LEFT JOIN accounts a ON t.account_id = a.id
-    ORDER BY t.date DESC
-  `;
+  const [transactions, accounts, categories, tagRows] = await Promise.all([
+    sql`
+      SELECT t.*, json_build_object('name', a.name) AS accounts
+      FROM transactions t
+      LEFT JOIN accounts a ON t.account_id = a.id
+      ORDER BY t.date DESC
+    `,
+    sql`SELECT id, name, currency FROM accounts WHERE status = 'active' ORDER BY name`,
+    sql`SELECT id, name FROM categories ORDER BY name ASC`,
+    sql`SELECT DISTINCT tag FROM transactions WHERE tag IS NOT NULL ORDER BY tag`,
+  ]);
 
-  const accounts = await sql`SELECT id, name, currency FROM accounts WHERE status = 'active' ORDER BY name`;
-
-  const categories = await sql`
-    SELECT id, name FROM categories ORDER BY name ASC
-  `;
+  const allTags = tagRows.map((r: any) => r.tag as string);
 
   const uncategorizedCount = transactions.filter(
     (t: any) =>
@@ -70,6 +71,7 @@ export default async function TransactionsPage() {
           data={transactions as any}
           categories={categories.map((c: any) => c.name)}
           accounts={accounts.map((a: any) => ({ id: a.id, name: a.name }))}
+          allTags={allTags}
           uncategorizedCount={uncategorizedCount}
         />
       )}

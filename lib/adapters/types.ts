@@ -23,6 +23,7 @@ export interface Transaction {
   is_manual: boolean;
   installment_index?: number | null;
   installment_total?: number | null;
+  tag?: string | null;
 }
 
 // Adapter Signature

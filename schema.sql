@@ -109,6 +109,10 @@ ALTER TABLE accounts ADD COLUMN IF NOT EXISTS interest_rate     DECIMAL(5,2);
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS loan_original_amount DECIMAL(12,2);
 ALTER TABLE accounts ADD COLUMN IF NOT EXISTS monthly_payment   DECIMAL(12,2);
 
+-- Transaction tags (idempotent)
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tag TEXT;
+CREATE INDEX IF NOT EXISTS idx_transactions_tag ON transactions(tag);
+
 -- Useful indexes
 CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_date       ON transactions(date);

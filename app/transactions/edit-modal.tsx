@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Transaction } from "@/lib/adapters/types";
-import { updateTransactionWithForecast, createTransferCounterpart } from "./actions";
+import { updateTransactionWithForecast, createTransferCounterpart, setTransactionTag } from "./actions";
 
 interface EditModalProps {
   transaction: Transaction | null;
@@ -10,6 +10,7 @@ interface EditModalProps {
   onClose: () => void;
   categories: string[];
   accounts: { id: string; name: string }[];
+  allTags?: string[];
 }
 
 type ForecastPlan =
@@ -53,6 +54,7 @@ export function EditModal({
   onClose,
   categories,
   accounts,
+  allTags = [],
 }: EditModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
@@ -68,6 +70,7 @@ export function EditModal({
     amount: "",
     description: "",
     category: "Uncategorized",
+    tag: "",
   });
 
   // Initialize form when opening / switching transaction
@@ -78,6 +81,7 @@ export function EditModal({
       amount: String(transaction.amount ?? ""),
       description: transaction.description ?? "",
       category: (transaction.category ?? "").trim() || "Uncategorized",
+      tag: (transaction as any).tag ?? "",
     });
     setForecastPlan({ kind: "none" });
     setTransferAccountId("");
@@ -124,6 +128,7 @@ export function EditModal({
         },
         forecastPlan,
       );
+      await setTransactionTag(transaction.id, form.tag.trim() || null);
 
       if (transferAccountId) {
         await createTransferCounterpart(transaction.id, transferAccountId);
@@ -226,6 +231,22 @@ export function EditModal({
                   </option>
                 ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-zinc-500 uppercase mb-1">
+              Tag
+            </label>
+            <datalist id="edit-tags-list">
+              {allTags.map((t) => <option key={t} value={t} />)}
+            </datalist>
+            <input
+              list="edit-tags-list"
+              value={form.tag}
+              onChange={(e) => setForm((f) => ({ ...f, tag: e.target.value }))}
+              placeholder="e.g. Brazil Trip 2025"
+              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
           </div>
 
           <div className="pt-2">

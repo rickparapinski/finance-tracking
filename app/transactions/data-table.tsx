@@ -14,13 +14,14 @@ import {
 import { useMemo, useState } from "react";
 import { Transaction } from "@/lib/adapters/types";
 import { EditModal } from "./edit-modal";
-import { bulkAssignCategory, createTransactionLink } from "./actions"; // Import the modal
+import { bulkAssignCategory, bulkSetTag, setTransactionTag, createTransactionLink } from "./actions";
 
 interface DataTableProps {
   columns: ColumnDef<Transaction>[];
   data: Transaction[];
   categories: string[];
   accounts: { id: string; name: string }[];
+  allTags: string[];
   uncategorizedCount: number;
 }
 
@@ -29,6 +30,7 @@ export function DataTable({
   data,
   categories,
   accounts,
+  allTags,
   uncategorizedCount,
 }: DataTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -36,6 +38,9 @@ export function DataTable({
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [selectedCategory, setSelectedCategory] = useState<string>("");
   const [showOnlyUncategorized, setShowOnlyUncategorized] = useState(false);
+  const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
+  const [bulkTagValue, setBulkTagValue] = useState<string>("");
+  const [isBulkTagLoading, setIsBulkTagLoading] = useState(false);
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [selectedLinkType, setSelectedLinkType] = useState<
     "transfer" | "settlement" | "statement_payment" | "refund"
@@ -46,16 +51,14 @@ export function DataTable({
   const [editingTransaction, setEditingTransaction] =
     useState<Transaction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  //Uncategorized filter
   const visibleData = useMemo(() => {
-    if (!showOnlyUncategorized) return data;
-    return data.filter(
-      (t) =>
-        !t.category ||
-        t.category.trim() === "" ||
-        t.category === "Uncategorized",
-    );
-  }, [data, showOnlyUncategorized]);
+    let d = data;
+    if (showOnlyUncategorized)
+      d = d.filter((t) => !t.category || t.category.trim() === "" || t.category === "Uncategorized");
+    if (activeTagFilter)
+      d = d.filter((t) => (t as any).tag === activeTagFilter);
+    return d;
+  }, [data, showOnlyUncategorized, activeTagFilter]);
 
   //checkbox selection
   const selectionColumn = useMemo<ColumnDef<Transaction>>(
@@ -113,6 +116,10 @@ export function DataTable({
         setEditingTransaction(t);
         setIsModalOpen(true);
       },
+      setTag: async (id, tag) => {
+        await setTransactionTag(id, tag);
+      },
+      allTags,
     },
   });
 
@@ -124,7 +131,29 @@ export function DataTable({
         onClose={() => setIsModalOpen(false)}
         categories={categories}
         accounts={accounts}
+        allTags={allTags}
       />
+
+      {/* Tag filter pills */}
+      {allTags.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Tags:</span>
+          {allTags.map((tag) => (
+            <button
+              key={tag}
+              onClick={() => setActiveTagFilter(activeTagFilter === tag ? null : tag)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium border transition ${
+                activeTagFilter === tag
+                  ? "bg-indigo-600 border-indigo-600 text-white"
+                  : "bg-indigo-50 border-indigo-100 text-indigo-700 hover:bg-indigo-100"
+              }`}
+            >
+              {tag}
+              {activeTagFilter === tag && <span className="opacity-70">×</span>}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div id="uncategorized" className="space-y-3 py-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -204,6 +233,40 @@ export function DataTable({
           >
             Clear selection
           </button>
+
+          <div className="h-9 w-px bg-slate-200 mx-1" />
+
+          {/* Bulk tag */}
+          <>
+            <datalist id="bulk-tags-list">
+              {allTags.map((t) => <option key={t} value={t} />)}
+            </datalist>
+            <input
+              list="bulk-tags-list"
+              value={bulkTagValue}
+              onChange={(e) => setBulkTagValue(e.target.value)}
+              placeholder="Tag name…"
+              className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 w-36"
+            />
+            <button
+              className="h-9 rounded-xl bg-indigo-600 px-4 text-xs font-medium text-white hover:bg-indigo-700 transition disabled:opacity-60"
+              disabled={isBulkTagLoading || !bulkTagValue.trim() || table.getSelectedRowModel().rows.length === 0}
+              onClick={async () => {
+                const ids = table.getSelectedRowModel().rows.map((r) => (r.original as any).id as string);
+                setIsBulkTagLoading(true);
+                try {
+                  await bulkSetTag(ids, bulkTagValue.trim());
+                  setRowSelection({});
+                  setBulkTagValue("");
+                } finally {
+                  setIsBulkTagLoading(false);
+                }
+              }}
+            >
+              {isBulkTagLoading ? "Tagging…" : `Tag selected (${table.getSelectedRowModel().rows.length})`}
+            </button>
+          </>
+
           <div className="h-9 w-px bg-slate-200 mx-1" />
 
           <select
