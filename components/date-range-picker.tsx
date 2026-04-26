@@ -20,7 +20,13 @@ function toDate(s: string) {
 }
 
 function fromDate(d: Date | undefined) {
-  return d ? d.toISOString().slice(0, 10) : "";
+  if (!d) return "";
+  // Use local year/month/day — toISOString() shifts to UTC and gives the wrong
+  // date for any timezone ahead of UTC (e.g. UTC+1 turns midnight → prev day).
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function fmtDate(s: string) {
