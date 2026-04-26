@@ -5,6 +5,7 @@ import Link from "next/link";
 import { archiveAccount, restoreAccount } from "./actions";
 import { EditAccountModal, Account } from "./edit-modal";
 import { bankLogo } from "@/lib/bank-logo";
+import { useHideBalances } from "@/contexts/hide-balances";
 
 export default function AccountsClient({ accounts }: { accounts: Account[] }) {
   const [showArchived, setShowArchived] = React.useState(false);
@@ -101,8 +102,10 @@ function AccountCard({
   const balanceEur = acc.balance_eur;
   const currency = acc.currency || "EUR";
   const isNonEur = currency !== "EUR";
+  const { hidden } = useHideBalances();
 
   const fmt = (n: number, cur = "EUR") =>
+    hidden ? "••••••" :
     new Intl.NumberFormat("de-DE", {
       style: "currency",
       currency: cur,

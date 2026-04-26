@@ -12,10 +12,13 @@ import {
   LayoutList,
   TrendingUp,
   LogOut,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { cn } from "@/lib/utils";
 import { bankLogo } from "@/lib/bank-logo";
+import { useHideBalances } from "@/contexts/hide-balances";
 
 interface SidebarProps {
   accounts: {
@@ -38,6 +41,7 @@ const menuItems = [
 
 export function AppSidebar({ accounts }: SidebarProps) {
   const pathname = usePathname();
+  const { hidden, toggle } = useHideBalances();
 
   return (
     <div className="w-64 border-r border-border bg-white shadow-[var(--shadow-soft)] text-slate-900 min-h-screen flex flex-col">
@@ -108,8 +112,8 @@ export function AppSidebar({ accounts }: SidebarProps) {
                   {acc.name}
                 </span>
               </div>
-              <span className="font-mono text-xs font-semibold">
-                {new Intl.NumberFormat("de-DE", {
+              <span className="font-mono text-xs font-semibold tabular-nums">
+                {hidden ? "••••••" : new Intl.NumberFormat("de-DE", {
                   style: "currency",
                   currency: "EUR",
                   minimumFractionDigits: 2,
@@ -141,6 +145,13 @@ export function AppSidebar({ accounts }: SidebarProps) {
           <Settings size={18} />
           Settings
         </Link>
+        <button
+          onClick={toggle}
+          className="flex items-center gap-3 px-3 py-2 w-full text-sm font-medium text-muted-foreground hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-colors"
+        >
+          {hidden ? <Eye size={18} /> : <EyeOff size={18} />}
+          {hidden ? "Show balances" : "Hide balances"}
+        </button>
         <form action={logout}>
           <button
             type="submit"

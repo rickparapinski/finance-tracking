@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { sql } from "@/lib/db";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { ClientProviders } from "@/components/layout/client-providers";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -72,12 +73,14 @@ export default async function RootLayout({
         {isLoginPage ? (
           children
         ) : (
-          <div className="flex min-h-screen">
-            <aside className="hidden md:block fixed inset-y-0 left-0 z-10 w-64 border-r border-border">
-              <AppSidebar accounts={accountsWithBalance} />
-            </aside>
-            <main className="flex-1 md:pl-64">{children}</main>
-          </div>
+          <ClientProviders>
+            <div className="flex min-h-screen">
+              <aside className="hidden md:block fixed inset-y-0 left-0 z-10 w-64 border-r border-border">
+                <AppSidebar accounts={accountsWithBalance} />
+              </aside>
+              <main className="flex-1 md:pl-64">{children}</main>
+            </div>
+          </ClientProviders>
         )}
       </body>
     </html>
