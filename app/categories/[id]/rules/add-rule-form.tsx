@@ -2,14 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { createRule, countMatchingUncategorized } from "./actions";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+import { X } from "lucide-react";
 
 export function AddRuleForm({ categoryId }: { categoryId: string }) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -79,30 +72,46 @@ export function AddRuleForm({ categoryId }: { categoryId: string }) {
         </button>
       </form>
 
-      <Dialog open={!!dialog} onOpenChange={() => setDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Apply rule to existing transactions?</DialogTitle>
-          </DialogHeader>
-          <p className="text-sm text-slate-600">
-            {dialog?.count === 0 ? (
-              <>No uncategorized transactions match <span className="font-mono font-semibold">{dialog.pattern}</span>.</>
-            ) : (
-              <>Found <span className="font-semibold">{dialog?.count}</span> uncategorized transaction{dialog?.count !== 1 ? "s" : ""} matching <span className="font-mono font-semibold">{dialog?.pattern}</span>. Categorize them now?</>
-            )}
-          </p>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => submit(false)}>
-              Skip
-            </Button>
-            {(dialog?.count ?? 0) > 0 && (
-              <Button onClick={() => submit(true)}>
-                Apply to {dialog?.count}
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {dialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-[var(--radius)] shadow-[var(--shadow-soft)] w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100">
+              <h2 className="text-base font-semibold text-slate-900">Apply to existing?</h2>
+              <button
+                onClick={() => setDialog(null)}
+                className="grid size-8 place-items-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="px-6 py-5">
+              <p className="text-sm text-slate-600">
+                {dialog.count === 0 ? (
+                  <>No uncategorized transactions match <span className="font-mono font-semibold text-slate-800">{dialog.pattern}</span>.</>
+                ) : (
+                  <>Found <span className="font-semibold text-slate-900">{dialog.count}</span> uncategorized transaction{dialog.count !== 1 ? "s" : ""} matching <span className="font-mono font-semibold text-slate-800">{dialog.pattern}</span>. Categorize them now?</>
+                )}
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 px-6 pb-5">
+              <button
+                onClick={() => submit(false)}
+                className="h-9 rounded-xl border border-slate-200 px-4 text-sm font-medium text-slate-700 hover:bg-slate-50 transition"
+              >
+                Skip
+              </button>
+              {dialog.count > 0 && (
+                <button
+                  onClick={() => submit(true)}
+                  className="h-9 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white hover:bg-emerald-600 transition"
+                >
+                  Apply to {dialog.count}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

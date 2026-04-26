@@ -63,6 +63,17 @@ export async function updateTransaction(formData: FormData) {
   revalidatePath("/");
 }
 
+export async function setTransactionTag(id: string, tag: string | null) {
+  await sql`UPDATE transactions SET tag = ${tag || null} WHERE id = ${id}`;
+  revalidatePath("/transactions");
+}
+
+export async function bulkSetTag(ids: string[], tag: string) {
+  if (!ids?.length) return;
+  await sql`UPDATE transactions SET tag = ${tag || null} WHERE id = ANY(${ids})`;
+  revalidatePath("/transactions");
+}
+
 export async function bulkAssignCategory(ids: string[], category: string) {
   if (!ids?.length) return;
   const cleanCategory = (category ?? "").trim();

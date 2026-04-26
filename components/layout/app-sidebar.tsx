@@ -11,8 +11,15 @@ import {
   Settings,
   LayoutList,
   TrendingUp,
+  LogOut,
+  Eye,
+  EyeOff,
+  Sparkles,
 } from "lucide-react";
+import { logout } from "@/app/login/actions";
 import { cn } from "@/lib/utils";
+import { bankLogo } from "@/lib/bank-logo";
+import { useHideBalances } from "@/contexts/hide-balances";
 
 interface SidebarProps {
   accounts: {
@@ -29,12 +36,14 @@ const menuItems = [
   { label: "Transactions", icon: ArrowRightLeft, href: "/transactions" },
   { label: "Forecast", icon: TrendingUp, href: "/forecast" },
   { label: "Categories", icon: LayoutList, href: "/categories" },
+  { label: "Advisor", icon: Sparkles, href: "/advisor" },
   { label: "Manage Accounts", icon: Wallet, href: "/accounts" },
   { label: "Import Data", icon: UploadCloud, href: "/import" },
 ];
 
 export function AppSidebar({ accounts }: SidebarProps) {
   const pathname = usePathname();
+  const { hidden, toggle } = useHideBalances();
 
   return (
     <div className="w-64 border-r border-border bg-white shadow-[var(--shadow-soft)] text-slate-900 min-h-screen flex flex-col">
@@ -99,16 +108,16 @@ export function AppSidebar({ accounts }: SidebarProps) {
               <div className="flex items-center gap-3 overflow-hidden">
                 <div
                   className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
-                  style={{ backgroundColor: acc.color || "#71717a" }}
+                  style={{ backgroundColor: acc.color || bankLogo(acc.name).bg }}
                 />
                 <span className="truncate font-medium text-muted-foreground group-hover:text-foreground transition-colors">
                   {acc.name}
                 </span>
               </div>
-              <span className="font-mono text-xs font-semibold">
-                {new Intl.NumberFormat("de-DE", {
+              <span className="font-mono text-xs font-semibold tabular-nums">
+                {hidden ? "••••••" : new Intl.NumberFormat("de-DE", {
                   style: "currency",
-                  currency: acc.currency,
+                  currency: "EUR",
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
                 }).format(acc.balance)}
@@ -124,8 +133,8 @@ export function AppSidebar({ accounts }: SidebarProps) {
         </div>
       </div>
 
-      {/* Footer - NOW UPDATED TO LINK */}
-      <div className="p-4 border-t border-border mt-auto">
+      {/* Footer */}
+      <div className="p-4 border-t border-border mt-auto space-y-1">
         <Link
           href="/settings"
           className={cn(
@@ -138,6 +147,22 @@ export function AppSidebar({ accounts }: SidebarProps) {
           <Settings size={18} />
           Settings
         </Link>
+        <button
+          onClick={toggle}
+          className="flex items-center gap-3 px-3 py-2 w-full text-sm font-medium text-muted-foreground hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-colors"
+        >
+          {hidden ? <Eye size={18} /> : <EyeOff size={18} />}
+          {hidden ? "Show balances" : "Hide balances"}
+        </button>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="flex items-center gap-3 px-3 py-2 w-full text-sm font-medium text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-colors"
+          >
+            <LogOut size={18} />
+            Lock
+          </button>
+        </form>
       </div>
     </div>
   );

@@ -2,6 +2,20 @@
 
 import { sql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+
+export async function getAccountTransactions(
+  accountId: string,
+  startDate: string,
+  endDate: string,
+) {
+  return await sql`
+    SELECT *
+    FROM transactions
+    WHERE account_id = ${accountId}
+      AND date >= ${startDate} AND date <= ${endDate}
+    ORDER BY date DESC
+  `;
+}
 import {
   getCurrentCycle,
   fetchCycleRates,

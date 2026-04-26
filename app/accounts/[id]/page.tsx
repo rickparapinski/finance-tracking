@@ -1,9 +1,8 @@
 import { sql } from "@/lib/db";
 import Link from "next/link";
-import { DataTable } from "@/app/transactions/data-table";
-import { columnsForAccount } from "./transactions-columns";
-import { createTransaction } from "./actions";
 import { bankLogo } from "@/lib/bank-logo";
+import { fetchCurrentCycle } from "@/lib/fetch-cycle";
+import { AccountTransactionsSection } from "./transactions-section";
 
 export const revalidate = 0;
 
@@ -12,37 +11,61 @@ export default async function AccountDetailPage(props: {
 }) {
   const { id: accountId } = await props.params;
 
+  const { start, end, key } = await fetchCurrentCycle();
+  const startStr = start.toISOString().slice(0, 10);
+  const endStr = end.toISOString().slice(0, 10);
+
   const [account] = await sql`SELECT * FROM accounts WHERE id = ${accountId}`;
 
-  const [transactions, categoriesRows, allAccounts, txSum] = await Promise.all([
-    sql`SELECT * FROM transactions WHERE account_id = ${accountId} ORDER BY date DESC`,
+  const [transactions, categoriesRows, allAccounts, txSum, cycles] = await Promise.all([
+    sql`
+      SELECT * FROM transactions
+      WHERE account_id = ${accountId}
+        AND date >= ${startStr} AND date <= ${endStr}
+      ORDER BY date DESC
+    `,
     sql`SELECT id, name FROM categories ORDER BY name ASC`,
-    sql`SELECT id, name FROM accounts WHERE status = 'active'`,
-    sql`SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE account_id = ${accountId}`,
+    sql`SELECT id, name, currency FROM accounts WHERE status = 'active'`,
+    sql`
+      SELECT
+        COALESCE(SUM(amount), 0) AS native_total,
+        COALESCE(SUM(amount_eur), 0) AS eur_total
+      FROM transactions WHERE account_id = ${accountId}
+    `,
+    sql`SELECT key, start_date, end_date FROM cycles ORDER BY start_date DESC LIMIT 12`,
   ]);
 
   const categories = categoriesRows.map((c: any) => c.name);
-  const balance = Number(account.initial_balance) + Number(txSum[0].total);
+  const balance = Number(account.initial_balance) + Number(txSum[0].native_total);
+
+  // EUR balance (shown prominently)
+  const eurBase =
+    account.initial_balance_eur != null
+      ? Number(account.initial_balance_eur)
+      : account.currency === "EUR"
+      ? Number(account.initial_balance)
+      : null;
+  const balanceEur = eurBase != null ? eurBase + Number(txSum[0].eur_total) : null;
 
   const uncategorizedCount = transactions.filter(
     (t: any) => !t.category || t.category.trim() === "" || t.category === "Uncategorized",
   ).length;
 
-  const today = new Date().toISOString().slice(0, 10);
-
   const logo = bankLogo(account.name);
   const currency = account.currency || "EUR";
   const isLiability = account.nature === "liability";
 
-  const fmt = (n: number) =>
+  const fmt = (n: number, cur = currency) =>
     new Intl.NumberFormat("de-DE", {
       style: "currency",
-      currency,
+      currency: cur,
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(n);
 
-  // Credit card computed values
+  const isNonEur = currency !== "EUR";
+
+  // Credit card
   const creditLimit = Number(account.credit_limit ?? 0);
   const used = Math.abs(Math.min(balance, 0));
   const available = creditLimit > 0 ? Math.max(0, creditLimit - used) : null;
@@ -50,7 +73,7 @@ export default async function AccountDetailPage(props: {
   const interestRate = Number(account.interest_rate ?? 0);
   const monthlyInterest = interestRate > 0 ? used * (interestRate / 100 / 12) : 0;
 
-  // Loan computed values
+  // Loan
   const loanOriginal = Number(account.loan_original_amount ?? 0);
   const loanRemaining = Math.abs(Math.min(balance, 0));
   const loanRepaid = loanOriginal > 0 ? Math.max(0, loanOriginal - loanRemaining) : 0;
@@ -70,7 +93,6 @@ export default async function AccountDetailPage(props: {
       <div className="rounded-xl bg-white shadow-[var(--shadow-softer)] overflow-hidden max-w-sm">
         <div className="h-1" style={{ backgroundColor: account.color || logo.bg }} />
         <div className="p-5 space-y-4">
-          {/* Logo + name */}
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 select-none"
@@ -84,19 +106,33 @@ export default async function AccountDetailPage(props: {
             </div>
           </div>
 
-          {/* Balance */}
           <div>
             <p className="text-[11px] text-slate-400 mb-0.5">
               {account.type === "Credit Card" ? "Current balance" :
                account.type === "Loan"        ? "Remaining debt" :
                                                 "Available balance"}
             </p>
-            <p className={`text-2xl font-bold tabular-nums ${isLiability ? "text-rose-600" : "text-slate-900"}`}>
-              {fmt(balance)}
-            </p>
+            {balanceEur != null ? (
+              <>
+                <p className={`text-2xl font-bold tabular-nums ${isLiability ? "text-rose-600" : "text-slate-900"}`}>
+                  {fmt(balanceEur, "EUR")}
+                </p>
+                {isNonEur && (
+                  <p className="text-[11px] text-slate-400 tabular-nums">{fmt(balance)}</p>
+                )}
+              </>
+            ) : (
+              <>
+                <p className={`text-2xl font-bold tabular-nums ${isLiability ? "text-rose-600" : "text-slate-900"}`}>
+                  {fmt(balance)}
+                </p>
+                {isNonEur && (
+                  <p className="text-[10px] text-amber-500 mt-0.5">Set EUR balance in Edit</p>
+                )}
+              </>
+            )}
           </div>
 
-          {/* Credit Card section */}
           {account.type === "Credit Card" && (creditLimit > 0 || monthlyInterest > 0) && (
             <div className="space-y-2 border-t border-slate-100 pt-3">
               {creditLimit > 0 && (
@@ -125,7 +161,6 @@ export default async function AccountDetailPage(props: {
             </div>
           )}
 
-          {/* Loan section */}
           {account.type === "Loan" && loanOriginal > 0 && (
             <div className="space-y-2 border-t border-slate-100 pt-3">
               <div className="flex justify-between text-[11px] text-slate-500">
@@ -155,78 +190,15 @@ export default async function AccountDetailPage(props: {
         </div>
       </div>
 
-      {/* Quick Add */}
-      <div className="rounded-[var(--radius)] bg-white p-6 shadow-[var(--shadow-softer)]">
-        <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Add</h3>
-        <form id="quick-tx-form" action={createTransaction} className="flex flex-wrap gap-3 items-end">
-          <input type="hidden" name="account_id" value={accountId} />
-
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 mb-1">Date</label>
-            <input
-              type="date"
-              name="date"
-              defaultValue={today}
-              required
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            />
-          </div>
-
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-[11px] font-semibold text-slate-500 mb-1">Description</label>
-            <input
-              name="description"
-              required
-              placeholder="e.g. REWE groceries"
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            />
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 mb-1">Category</label>
-            <select
-              name="category"
-              defaultValue="Uncategorized"
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            >
-              <option value="Uncategorized">Uncategorized</option>
-              {categories
-                .filter((c) => c && c !== "Uncategorized")
-                .map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-semibold text-slate-500 mb-1">
-              Amount ({currency})
-            </label>
-            <input
-              name="amount"
-              type="number"
-              step="0.01"
-              required
-              placeholder="-12.90"
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            />
-          </div>
-
-          <button
-            type="submit"
-            form="quick-tx-form"
-            className="h-10 rounded-xl bg-emerald-500 px-5 text-sm font-medium text-white shadow-[var(--shadow-softer)] hover:opacity-90 transition"
-          >
-            Add transaction
-          </button>
-        </form>
-      </div>
-
-      <DataTable
-        columns={columnsForAccount}
-        data={transactions as any}
+      <AccountTransactionsSection
+        accountId={accountId}
+        initialTransactions={transactions as any[]}
+        cycles={cycles as any[]}
+        currentCycleKey={key}
+        currentStart={startStr}
+        currentEnd={endStr}
         categories={categories}
-        accounts={allAccounts.map((a: any) => ({ id: a.id, name: a.name }))}
+        accounts={allAccounts.map((a: any) => ({ id: a.id, name: a.name, currency: a.currency || "EUR" }))}
         uncategorizedCount={uncategorizedCount}
       />
     </main>
