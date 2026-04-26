@@ -14,6 +14,7 @@ import {
   LogOut,
   Eye,
   EyeOff,
+  Sparkles,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { cn } from "@/lib/utils";
@@ -35,6 +36,7 @@ const menuItems = [
   { label: "Transactions", icon: ArrowRightLeft, href: "/transactions" },
   { label: "Forecast", icon: TrendingUp, href: "/forecast" },
   { label: "Categories", icon: LayoutList, href: "/categories" },
+  { label: "Advisor", icon: Sparkles, href: "/advisor" },
   { label: "Manage Accounts", icon: Wallet, href: "/accounts" },
   { label: "Import Data", icon: UploadCloud, href: "/import" },
 ];
