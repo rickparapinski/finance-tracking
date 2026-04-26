@@ -23,6 +23,10 @@ function fromDate(d: Date | undefined) {
   return d ? d.toISOString().slice(0, 10) : "";
 }
 
+function fmtDate(s: string) {
+  return format(new Date(s + "T00:00:00"), "dd MMM yyyy");
+}
+
 export function DateRangePicker({ from, to, onChange, className }: DateRangePickerProps) {
   const [open, setOpen] = useState(false);
 
@@ -31,23 +35,30 @@ export function DateRangePicker({ from, to, onChange, className }: DateRangePick
       ? { from: toDate(from), to: toDate(to) }
       : undefined;
 
-  const hasRange = !!(from || to);
+  const hasSelection = !!(from || to);
 
-  const label = hasRange
-    ? [
-        from ? format(new Date(from + "T00:00:00"), "dd MMM yyyy") : "…",
-        to   ? format(new Date(to   + "T00:00:00"), "dd MMM yyyy") : "…",
-      ].join(" – ")
-    : "Pick date range";
+  // Label: single date when from === to (or only from set), range otherwise
+  const label = !hasSelection
+    ? "Pick a date or range"
+    : from && to && from !== to
+      ? `${fmtDate(from)} – ${fmtDate(to)}`
+      : fmtDate(from || to);
+
+  // Commit current selection and close.
+  // If only "from" is set, snap "to" to the same day → single-day filter.
+  const apply = () => {
+    if (from && !to) onChange(from, from);
+    setOpen(false);
+  };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={(o) => { if (!o) apply(); else setOpen(true); }}>
       <PopoverTrigger asChild>
         <button
           className={cn(
             "h-9 inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-medium transition",
             "hover:bg-white hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-400",
-            hasRange ? "text-slate-800" : "text-slate-400",
+            hasSelection ? "text-slate-800" : "text-slate-400",
             className
           )}
         >
@@ -55,6 +66,7 @@ export function DateRangePicker({ from, to, onChange, className }: DateRangePick
           {label}
         </button>
       </PopoverTrigger>
+
       <PopoverContent className="w-auto p-0" align="start">
         <Calendar
           mode="range"
@@ -62,23 +74,45 @@ export function DateRangePicker({ from, to, onChange, className }: DateRangePick
           defaultMonth={toDate(from) ?? new Date()}
           onSelect={(r) => {
             onChange(fromDate(r?.from), fromDate(r?.to));
-            // close automatically once both ends are picked
-            if (r?.from && r?.to) setOpen(false);
+            // Auto-close only when a full range (both ends different) is chosen
+            if (r?.from && r?.to && fromDate(r.from) !== fromDate(r.to)) {
+              setOpen(false);
+            }
           }}
           numberOfMonths={2}
           captionLayout="label"
         />
-        {hasRange && (
-          <div className="border-t border-slate-100 px-3 py-2 flex justify-end">
+
+        {/* Footer: Apply (always shown while open) + Clear (when something is selected) */}
+        <div className="border-t border-slate-100 px-3 py-2 flex items-center justify-between gap-2">
+          <p className="text-[11px] text-slate-400">
+            {from && !to
+              ? "Click Apply for single day, or pick an end date"
+              : from && to && from === to
+                ? "Single day selected"
+                : from && to
+                  ? "Range selected"
+                  : "Click a start date"}
+          </p>
+          <div className="flex items-center gap-1.5">
+            {hasSelection && (
+              <button
+                onClick={() => { onChange("", ""); }}
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition"
+              >
+                <X className="w-3 h-3" />
+                Clear
+              </button>
+            )}
             <button
-              onClick={() => { onChange("", ""); setOpen(false); }}
-              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
+              onClick={apply}
+              disabled={!hasSelection}
+              className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-40 transition"
             >
-              <X className="w-3 h-3" />
-              Clear dates
+              Apply
             </button>
           </div>
-        )}
+        </div>
       </PopoverContent>
     </Popover>
   );
