@@ -4,13 +4,30 @@ import { useState, useRef } from "react";
 import { ColumnDef, Row, Table } from "@tanstack/react-table";
 import { Transaction } from "@/lib/adapters/types";
 import { deleteTransaction } from "./actions";
+import { categoryColor } from "@/lib/category-color";
 import { Tag, X } from "lucide-react";
+
+declare module "@tanstack/react-table" {
+  interface TableMeta<TData extends unknown> {
+    openEditModal: (transaction: TData) => void;
+    setTag: (id: string, tag: string | null) => Promise<void>;
+    allTags: string[];
+  }
+}
+
+function fmtDate(raw: string) {
+  const d = new Date(raw.split("T")[0] + "T00:00:00");
+  return {
+    day: d.toLocaleDateString("en-GB", { day: "2-digit" }),
+    mon: d.toLocaleDateString("en-GB", { month: "short" }),
+    year: d.getFullYear(),
+  };
+}
 
 function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transaction> }) {
   const tag = (row.original as any).tag as string | null;
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState(tag ?? "");
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const save = async () => {
     const trimmed = val.trim() || null;
@@ -22,12 +39,9 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
     return (
       <>
         <datalist id="tx-tags-list">
-          {(table.options.meta?.allTags ?? []).map((t) => (
-            <option key={t} value={t} />
-          ))}
+          {(table.options.meta?.allTags ?? []).map((t) => <option key={t} value={t} />)}
         </datalist>
         <input
-          ref={inputRef}
           autoFocus
           list="tx-tags-list"
           value={val}
@@ -37,8 +51,8 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
             if (e.key === "Enter") save();
             if (e.key === "Escape") setEditing(false);
           }}
-          placeholder="Type or pick a tag…"
-          className="h-6 w-32 rounded-md border border-indigo-300 bg-white px-2 text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          placeholder="Add tag…"
+          className="h-6 w-28 rounded-md border border-indigo-300 bg-white px-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
         />
       </>
     );
@@ -49,15 +63,11 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
       <span
         onClick={() => { setVal(tag); setEditing(true); }}
         className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-700 cursor-pointer hover:bg-indigo-100 transition group"
-        title="Click to edit tag"
       >
-        <Tag className="w-2.5 h-2.5" />
+        <Tag className="w-2.5 h-2.5 shrink-0" />
         {tag}
         <button
-          onClick={async (e) => {
-            e.stopPropagation();
-            await table.options.meta?.setTag(String(row.original.id), null);
-          }}
+          onClick={async (e) => { e.stopPropagation(); await table.options.meta?.setTag(String(row.original.id), null); }}
           className="ml-0.5 opacity-0 group-hover:opacity-100 transition text-indigo-400 hover:text-rose-500"
         >
           <X className="w-2.5 h-2.5" />
@@ -71,44 +81,35 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
       onClick={() => { setVal(""); setEditing(true); }}
       className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-200 px-2 py-0.5 text-[11px] text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition opacity-0 group-hover:opacity-100"
     >
-      <Tag className="w-2.5 h-2.5" />
-      tag
+      <Tag className="w-2.5 h-2.5" /> tag
     </button>
   );
-}
-
-// Define the custom meta type so TypeScript doesn't complain
-declare module "@tanstack/react-table" {
-  interface TableMeta<TData extends unknown> {
-    openEditModal: (transaction: TData) => void;
-    setTag: (id: string, tag: string | null) => Promise<void>;
-    allTags: string[];
-  }
 }
 
 export const columns: ColumnDef<Transaction>[] = [
   {
     accessorKey: "date",
     header: "Date",
-    // whitespace-nowrap ensures the column is only as wide as the date
-    cell: ({ row }) => (
-      <div className="whitespace-nowrap text-zinc-500">
-        {row.original.date.split("T")[0]}
-      </div>
-    ),
+    cell: ({ row }) => {
+      const { day, mon } = fmtDate(row.original.date);
+      return (
+        <div className="text-center w-10 shrink-0">
+          <div className="text-sm font-semibold text-slate-800 leading-tight">{day}</div>
+          <div className="text-[11px] text-slate-400 uppercase tracking-wide">{mon}</div>
+        </div>
+      );
+    },
   },
   {
     accessorKey: "description",
     header: "Description",
     cell: ({ row }) => {
-      const { installment_index: idx, installment_total: total } = row.original;
+      const { installment_index: idx, installment_total: total } = row.original as any;
       return (
-        <div className="min-w-[220px] flex items-center gap-2">
-          <span className="text-sm font-medium text-slate-800">
-            {row.original.description}
-          </span>
+        <div className="min-w-[180px]">
+          <span className="text-sm font-medium text-slate-800">{row.original.description}</span>
           {idx != null && total != null && (
-            <span className="shrink-0 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-600 tabular-nums">
+            <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-600 tabular-nums">
               {idx}/{total}
             </span>
           )}
@@ -119,44 +120,42 @@ export const columns: ColumnDef<Transaction>[] = [
   {
     accessorKey: "category",
     header: "Category",
-    cell: ({ row }) => (
-      <span className="whitespace-nowrap bg-zinc-100 dark:bg-zinc-800 px-2 py-1 rounded-full text-xs text-zinc-600 dark:text-zinc-300">
-        {row.original.category || "Uncategorized"}
-      </span>
-    ),
+    cell: ({ row }) => {
+      const cat = row.original.category || "Uncategorized";
+      const color = cat === "Uncategorized" ? "#94a3b8" : categoryColor(cat);
+      return (
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
+          <span className="text-xs text-slate-600">{cat}</span>
+        </div>
+      );
+    },
   },
   {
     accessorKey: "accounts.name",
     header: "Account",
     cell: ({ row }) => (
-      <div className="whitespace-nowrap text-xs text-zinc-500">
-        {row.original.accounts?.name}
-      </div>
+      <span className="text-xs text-slate-400 whitespace-nowrap">{(row.original as any).accounts?.name}</span>
     ),
+  },
+  {
+    id: "tag",
+    header: "",
+    cell: ({ row, table }) => <TagCell row={row} table={table} />,
   },
   {
     accessorKey: "amount",
     header: () => <div className="text-right">Amount</div>,
     cell: ({ row }) => {
       const amount = row.original.amount;
-      const amountEur = row.original.amount_eur;
-      const currency = row.original.original_currency;
+      const amountEur = (row.original as any).amount_eur;
+      const currency = (row.original as any).original_currency || "EUR";
       const isNonEur = currency && currency !== "EUR";
-
       const fmt = (n: number, cur: string) =>
         new Intl.NumberFormat("de-DE", { style: "currency", currency: cur }).format(n);
-
       return (
-        <div className="text-right whitespace-nowrap font-mono">
-          <span
-            className={[
-              "font-semibold tabular-nums",
-              amount > 0 && "text-emerald-600",
-              amount < 0 && "text-slate-700",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-          >
+        <div className="text-right">
+          <span className={`font-semibold tabular-nums font-mono text-sm ${amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>
             {fmt(amount, currency || "EUR")}
           </span>
           {isNonEur && amountEur != null && (
@@ -167,28 +166,21 @@ export const columns: ColumnDef<Transaction>[] = [
     },
   },
   {
-    id: "tag",
-    header: "",
-    cell: ({ row, table }) => <TagCell row={row} table={table} />,
-  },
-  {
     id: "actions",
-    cell: ({ row, table }) => {
-      return (
-        <div className="flex justify-end gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => table.options.meta?.openEditModal(row.original)}
-            className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition"
-          >
-            Edit
+    cell: ({ row, table }) => (
+      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => table.options.meta?.openEditModal(row.original)}
+          className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition"
+        >
+          Edit
+        </button>
+        <form action={deleteTransaction.bind(null, row.original.id)}>
+          <button className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition">
+            Del
           </button>
-          <form action={deleteTransaction.bind(null, row.original.id)}>
-            <button className="rounded-md px-2 py-1 text-xs font-medium text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition">
-              Del
-            </button>
-          </form>
-        </div>
-      );
-    },
+        </form>
+      </div>
+    ),
   },
 ];
