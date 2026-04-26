@@ -45,9 +45,18 @@ export function AccountTransactionsSection({
   }
 
   const refreshCurrentCycle = async () => {
-    const cycle = cycles.find((c) => c.key === selectedCycle);
-    if (!cycle) return;
-    const data = await getAccountTransactions(accountId, cycle.start_date, cycle.end_date);
+    let start: string;
+    let end: string;
+    if (selectedCycle === currentCycleKey) {
+      start = currentStart;
+      end = currentEnd;
+    } else {
+      const cycle = cycles.find((c) => c.key === selectedCycle);
+      if (!cycle) return;
+      start = cycle.start_date;
+      end = cycle.end_date;
+    }
+    const data = await getAccountTransactions(accountId, start, end);
     setTransactions(data as Transaction[]);
   };
 
