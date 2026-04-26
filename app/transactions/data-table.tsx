@@ -12,6 +12,7 @@ import {
   bulkAssignCategory, bulkSetTag, setTransactionTag, createTransactionLink,
 } from "./actions";
 import { Tag } from "lucide-react";
+import { DateRangePicker } from "@/components/date-range-picker";
 
 interface DataTableProps {
   columns: ColumnDef<Transaction>[];
@@ -168,21 +169,15 @@ export function DataTable({
             onChange={(e) => setGlobalFilter(e.target.value)}
             className="h-9 min-w-[200px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
           />
-          <div className="flex items-center gap-1.5">
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => { setDateFrom(e.target.value); setActivePreset(""); }}
-              className="h-9 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
-            />
-            <span className="text-slate-400 text-xs">–</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => { setDateTo(e.target.value); setActivePreset(""); }}
-              className="h-9 rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition"
-            />
-          </div>
+          <DateRangePicker
+            from={dateFrom}
+            to={dateTo}
+            onChange={(from, to) => {
+              setDateFrom(from);
+              setDateTo(to);
+              setActivePreset("");
+            }}
+          />
         </div>
 
         {/* Row 2: Presets + uncategorized + count */}
