@@ -89,7 +89,21 @@ export function buildSystemPrompt(
           .join("\n")
       : "";
 
-  return `You are a personal finance advisor embedded in the user's own finance tracking app. You have access to their real, live financial data below. Be direct and specific — cite actual numbers. Be concise and actionable, not preachy. Skip generic advice; focus on what THIS person's data shows. Use plain text with newlines for lists (no markdown symbols like ** or ##). Keep responses focused and under 300 words unless the user asks for detail.
+  // ── Full transaction ledger (compact, for granular Q&A) ─────────────
+  // Cached in system prompt — follow-up messages pay ~10% of this cost.
+  const txLines = data.allTransactions
+    .map((t) => {
+      const amt = signed(Number(t.eur));
+      const cur = t.original_currency !== "EUR"
+        ? ` (${t.original_currency} ${Number(t.native_amount).toFixed(2)})`
+        : "";
+      const tag = t.tag ? ` #${t.tag}` : "";
+      const desc = (t.description ?? "").slice(0, 50);
+      return `${t.date}  ${amt.padStart(10)}  ${t.category.padEnd(20)}  ${t.account.padEnd(14)}  ${desc}${cur}${tag}`;
+    })
+    .join("\n");
+
+  return `You are a personal finance advisor embedded in the user's own finance tracking app. You have full access to their real, live financial data — including every individual transaction — listed below. Be direct and specific; cite actual numbers and merchant names from the data. Be concise and actionable. Use plain text with newlines for lists (no markdown like ** or ##). For specific questions ("how much did I spend on Wolt?") scan the FULL TRANSACTION LEDGER and sum the matching rows precisely.
 
 ════════════════════════════════════════
 FINANCIAL SNAPSHOT — ${data.periodLabel}
@@ -105,7 +119,7 @@ ${
     : ""
 }
 
-INCOME THIS MONTH
+INCOME THIS PERIOD
 ${incomeLines || "  (none recorded yet)"}
   Total in:              ${signed(totalIn)}
 
@@ -114,14 +128,17 @@ ${expenseLines || "  (none recorded yet)"}
   ────────────────────────────────────
   Total out:             ${signed(totalOut)}
 
-NET THIS MONTH:          ${signed(net)}
-${net >= 0 ? "→ Saving month ✓" : "→ Spending more than earning"}
+NET THIS PERIOD:         ${signed(net)}
+${net >= 0 ? "→ Saving period ✓" : "→ Spending more than earning"}
 ${budgetLines ? `\nBUDGET TRACKING\n${budgetLines}` : ""}
-
-TOP TRANSACTIONS THIS MONTH
-${topTxLines || "  (none yet)"}
 
 RECURRING COMMITMENTS
 ${recurringLines}
+
+════════════════════════════════════════
+FULL TRANSACTION LEDGER (${data.allTransactions.length} transactions)
+date        amount      category              account         description
+────────────────────────────────────────────────────────────────────────
+${txLines || "  (none)"}
 ════════════════════════════════════════`;
 }

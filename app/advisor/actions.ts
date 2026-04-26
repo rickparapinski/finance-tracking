@@ -23,7 +23,7 @@ export async function getFinancialSnapshot() {
     d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
   const periodLabel = `${fmt(start)} – ${fmt(end)} ${end.getFullYear()}`;
 
-  const [accounts, thisPeriod, lastPeriod, topTx, recurring, budgets] = await Promise.all([
+  const [accounts, thisPeriod, lastPeriod, topTx, recurring, budgets, allTx] = await Promise.all([
     // All active account balances (all-time, as of today)
     sql`
       SELECT a.id, a.name, a.nature, a.currency,
@@ -83,6 +83,21 @@ export async function getFinancialSnapshot() {
       WHERE monthly_budget > 0 AND is_active = true
       ORDER BY monthly_budget DESC
     `,
+
+    // ALL transactions in the period — full detail for granular Q&A
+    // Cached in the system prompt so follow-up messages cost ~10% of the
+    // context price.
+    sql`
+      SELECT t.date, t.description,
+             ROUND(COALESCE(t.amount_eur, t.amount)::numeric, 2) AS eur,
+             t.original_currency,
+             ROUND(t.amount::numeric, 2) AS native_amount,
+             t.category, t.tag, a.name AS account
+      FROM transactions t
+      JOIN accounts a ON a.id = t.account_id
+      WHERE t.date >= ${cycleStart} AND t.date <= ${cycleEnd}
+      ORDER BY t.date ASC, ABS(COALESCE(t.amount_eur, t.amount)) DESC
+    `,
   ]);
 
   return {
@@ -96,5 +111,6 @@ export async function getFinancialSnapshot() {
     topTx,
     recurring,
     budgets,
+    allTransactions: allTx,
   };
 }
