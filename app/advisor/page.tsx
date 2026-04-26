@@ -1,4 +1,5 @@
-import { getFinancialSnapshot, buildSystemPrompt } from "./actions";
+import { getFinancialSnapshot } from "./actions";
+import { buildSystemPrompt } from "./prompt";
 import { AdvisorChat } from "./chat";
 
 export const dynamic = "force-dynamic";
