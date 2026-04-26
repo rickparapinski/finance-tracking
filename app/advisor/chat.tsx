@@ -10,41 +10,73 @@ interface Message {
 }
 
 const SUGGESTIONS = [
-  "Where am I overspending this month?",
+  "Where am I overspending this period?",
   "Am I on track to save money?",
   "What can I cut to save more?",
-  "How does this month compare to last?",
+  "How does this period compare to last?",
   "Give me a budget plan for next month",
   "What are my biggest recurring costs?",
 ];
 
 const OPENING_PROMPT =
-  "Give me a concise overview of my finances this month. Highlight the 2-3 most important things I should know or act on right now.";
+  "Give me a concise overview of my finances this period. Highlight the 2-3 most important things I should know or act on right now.";
+
+function storageKey(cycleKey: string) {
+  return `advisor-chat-${cycleKey}`;
+}
 
 export function AdvisorChat({
   systemPrompt,
-  monthName,
+  periodLabel,
+  cycleKey,
 }: {
   systemPrompt: string;
-  monthName: string;
+  periodLabel: string;
+  cycleKey: string;
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const hasInit = useRef(false);
 
-  // Auto-trigger opening analysis once on mount
+  // ── Hydrate from localStorage on mount ──────────────────────────────
   useEffect(() => {
-    if (!hasInit.current) {
+    const stored = localStorage.getItem(storageKey(cycleKey));
+    if (stored) {
+      try {
+        const parsed: Message[] = JSON.parse(stored);
+        if (parsed.length > 0) {
+          setMessages(parsed);
+          hasInit.current = true; // skip auto-trigger — conversation exists
+        }
+      } catch {
+        // corrupt data — start fresh
+      }
+    }
+    setHydrated(true);
+  // cycleKey is stable for the session; only run once
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Auto-trigger opening analysis (only for fresh cycles) ───────────
+  useEffect(() => {
+    if (hydrated && !hasInit.current) {
       hasInit.current = true;
       sendMessage(OPENING_PROMPT, true);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated]);
 
-  // Scroll to bottom when messages change
+  // ── Persist to localStorage whenever messages change ─────────────────
+  useEffect(() => {
+    if (!hydrated || messages.length === 0) return;
+    localStorage.setItem(storageKey(cycleKey), JSON.stringify(messages));
+  }, [messages, cycleKey, hydrated]);
+
+  // ── Auto-scroll ───────────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
@@ -58,18 +90,14 @@ export function AdvisorChat({
       content: userContent,
     };
 
-    setMessages((prev) => {
-      const next = hidden
-        ? prev // don't show the auto-opening prompt as a bubble
-        : [...prev, userMsg];
-      return next;
-    });
+    // Build the history we send to the API before touching state
+    const historyForApi = hidden
+      ? [{ role: "user" as const, content: userContent }]
+      : [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
+
+    setMessages((prev) => (hidden ? prev : [...prev, userMsg]));
     setInput("");
     setIsStreaming(true);
-
-    const historyForApi = hidden
-      ? [{ role: "user", content: userContent }]
-      : [...messages, userMsg].map((m) => ({ role: m.role, content: m.content }));
 
     const assistantId = crypto.randomUUID();
     setMessages((prev) => [
@@ -119,20 +147,24 @@ export function AdvisorChat({
   };
 
   const handleReset = () => {
+    localStorage.removeItem(storageKey(cycleKey));
     setMessages([]);
     hasInit.current = false;
+    // Kick off a fresh opening analysis after state clears
     setTimeout(() => {
       hasInit.current = true;
       sendMessage(OPENING_PROMPT, true);
     }, 0);
   };
 
-  // Show suggestions only after the first assistant reply and when not busy
   const showSuggestions =
     !isStreaming &&
     messages.length >= 1 &&
     messages[messages.length - 1].role === "assistant" &&
     messages[messages.length - 1].content.length > 0;
+
+  // Don't flash empty UI before localStorage loads
+  if (!hydrated) return null;
 
   return (
     <div className="flex flex-col h-screen bg-slate-50">
@@ -147,7 +179,7 @@ export function AdvisorChat({
               Finance Advisor
             </h1>
             <p className="text-[11px] text-slate-400 leading-tight">
-              {monthName} · powered by Claude
+              {periodLabel} · powered by Claude
             </p>
           </div>
         </div>
@@ -184,7 +216,6 @@ export function AdvisorChat({
               {msg.content ? (
                 <p className="whitespace-pre-wrap">{msg.content}</p>
               ) : (
-                // Typing indicator while streaming
                 <span className="flex items-center gap-1 h-5">
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce [animation-delay:0ms]" />
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-300 animate-bounce [animation-delay:150ms]" />
@@ -201,7 +232,6 @@ export function AdvisorChat({
           </div>
         ))}
 
-        {/* Suggestion chips */}
         {showSuggestions && (
           <div className="flex flex-wrap gap-2 pt-1">
             {SUGGESTIONS.map((s) => (

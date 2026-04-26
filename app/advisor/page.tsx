@@ -9,6 +9,10 @@ export default async function AdvisorPage() {
   const systemPrompt = buildSystemPrompt(snapshot);
 
   return (
-    <AdvisorChat systemPrompt={systemPrompt} monthName={snapshot.monthName} />
+    <AdvisorChat
+      systemPrompt={systemPrompt}
+      periodLabel={snapshot.periodLabel}
+      cycleKey={snapshot.cycleKey}
+    />
   );
 }

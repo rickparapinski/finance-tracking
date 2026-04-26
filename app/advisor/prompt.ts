@@ -92,7 +92,7 @@ export function buildSystemPrompt(
   return `You are a personal finance advisor embedded in the user's own finance tracking app. You have access to their real, live financial data below. Be direct and specific — cite actual numbers. Be concise and actionable, not preachy. Skip generic advice; focus on what THIS person's data shows. Use plain text with newlines for lists (no markdown symbols like ** or ##). Keep responses focused and under 300 words unless the user asks for detail.
 
 ════════════════════════════════════════
-FINANCIAL SNAPSHOT — ${data.monthName}
+FINANCIAL SNAPSHOT — ${data.periodLabel}
 ════════════════════════════════════════
 
 LIQUID ACCOUNTS (assets)

@@ -1,23 +1,30 @@
 "use server";
 
 import { sql } from "@/lib/db";
+import { fetchCurrentCycle } from "@/lib/fetch-cycle";
 
 export async function getFinancialSnapshot() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
+  // Use the same billing cycle the rest of the app uses (e.g. Mar 25 – Apr 27)
+  const { start, end, key: cycleKey } = await fetchCurrentCycle();
+  const cycleStart = start.toISOString().slice(0, 10);
+  const cycleEnd   = end.toISOString().slice(0, 10);
 
-  const monthStart = `${year}-${String(month).padStart(2, "0")}-01`;
-  const monthEnd = new Date(year, month, 0).toISOString().slice(0, 10);
+  // Previous cycle: go back one month from cycle start
+  const prevEnd   = new Date(start);
+  prevEnd.setDate(prevEnd.getDate() - 1);
+  const prevStart = new Date(prevEnd);
+  prevStart.setMonth(prevStart.getMonth() - 1);
+  prevStart.setDate(start.getDate()); // same day-of-month
+  const prevStartStr = prevStart.toISOString().slice(0, 10);
+  const prevEndStr   = prevEnd.toISOString().slice(0, 10);
 
-  const lastMonthD = new Date(year, month - 2, 1);
-  const lastMonthStart = `${lastMonthD.getFullYear()}-${String(lastMonthD.getMonth() + 1).padStart(2, "0")}-01`;
-  const lastMonthEnd = new Date(year, month - 1, 0).toISOString().slice(0, 10);
+  // Human-readable label, e.g. "25 Mar – 27 Apr 2026"
+  const fmt = (d: Date) =>
+    d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+  const periodLabel = `${fmt(start)} – ${fmt(end)} ${end.getFullYear()}`;
 
-  const monthName = now.toLocaleDateString("en-GB", { month: "long", year: "numeric" });
-
-  const [accounts, thisMonth, lastMonth, topTx, recurring, budgets] = await Promise.all([
-    // Account balances
+  const [accounts, thisPeriod, lastPeriod, topTx, recurring, budgets] = await Promise.all([
+    // All active account balances (all-time, as of today)
     sql`
       SELECT a.id, a.name, a.nature, a.currency,
              COALESCE(a.initial_balance_eur, CASE WHEN a.currency = 'EUR' THEN a.initial_balance ELSE 0 END) AS base_eur,
@@ -29,34 +36,34 @@ export async function getFinancialSnapshot() {
       ORDER BY a.nature, a.name
     `,
 
-    // This month by category
+    // This cycle by category
     sql`
       SELECT category,
              ROUND(SUM(COALESCE(amount_eur, amount))::numeric, 2) AS total,
              COUNT(*) AS tx_count
       FROM transactions
-      WHERE date >= ${monthStart} AND date <= ${monthEnd}
+      WHERE date >= ${cycleStart} AND date <= ${cycleEnd}
       GROUP BY category
       ORDER BY SUM(COALESCE(amount_eur, amount)) ASC
     `,
 
-    // Last month by category
+    // Previous cycle by category (for comparison)
     sql`
       SELECT category,
              ROUND(SUM(COALESCE(amount_eur, amount))::numeric, 2) AS total
       FROM transactions
-      WHERE date >= ${lastMonthStart} AND date <= ${lastMonthEnd}
+      WHERE date >= ${prevStartStr} AND date <= ${prevEndStr}
       GROUP BY category
     `,
 
-    // Top transactions this month by absolute value
+    // Top transactions this cycle by absolute value
     sql`
       SELECT t.date, t.description,
              ROUND(COALESCE(t.amount_eur, t.amount)::numeric, 2) AS amount_eur,
              t.original_currency, t.category, a.name AS account_name
       FROM transactions t
       JOIN accounts a ON a.id = t.account_id
-      WHERE t.date >= ${monthStart} AND t.date <= ${monthEnd}
+      WHERE t.date >= ${cycleStart} AND t.date <= ${cycleEnd}
       ORDER BY ABS(COALESCE(t.amount_eur, t.amount)) DESC
       LIMIT 12
     `,
@@ -78,5 +85,16 @@ export async function getFinancialSnapshot() {
     `,
   ]);
 
-  return { monthName, accounts, thisMonth, lastMonth, topTx, recurring, budgets };
+  return {
+    cycleKey,
+    cycleStart,
+    cycleEnd,
+    periodLabel,
+    accounts,
+    thisMonth: thisPeriod,
+    lastMonth: lastPeriod,
+    topTx,
+    recurring,
+    budgets,
+  };
 }
