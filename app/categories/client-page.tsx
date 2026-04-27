@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { CategoryModal } from "./category-modal";
 import { getSpendingForCycle } from "./actions";
 import { categoryColor } from "@/lib/category-color";
+import { CycleNavigator } from "@/components/cycle-navigator";
+import { type Period } from "@/lib/periods";
 
 type Category = {
   id: string;
@@ -15,35 +17,27 @@ type Category = {
   monthly_budget: number | null;
 };
 
-type Cycle = { key: string; start_date: string; end_date: string };
-
 export function CategoriesClientPage({
   categories,
   spendingMap: initialSpending,
-  cycles,
+  periods,
   currentCycleKey,
-  currentStart,
-  currentEnd,
 }: {
   categories: Category[];
   spendingMap: Record<string, number>;
-  cycles: Cycle[];
+  periods: Period[];
   currentCycleKey: string;
-  currentStart: string;
-  currentEnd: string;
 }) {
   const router = useRouter();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [spendingMap, setSpendingMap] = useState(initialSpending);
-  const [selectedCycle, setSelectedCycle] = useState(currentCycleKey);
+  const [selectedKey, setSelectedKey] = useState(currentCycleKey);
   const [isPending, startTransition] = useTransition();
 
-  const handleCycleChange = (key: string) => {
-    setSelectedCycle(key);
-    const cycle = cycles.find((c) => c.key === key);
-    if (!cycle) return;
+  const handlePeriodChange = (period: Period) => {
+    setSelectedKey(period.key);
     startTransition(async () => {
-      const data = await getSpendingForCycle(cycle.start_date, cycle.end_date);
+      const data = await getSpendingForCycle(period.start_date, period.end_date);
       setSpendingMap(data);
     });
   };
@@ -58,17 +52,6 @@ export function CategoriesClientPage({
 
   const income = categories.filter((c) => c.type === "income");
   const expense = categories.filter((c) => c.type === "expense");
-
-  // Build cycle options: current first, then past (deduplicated)
-  const otherCycles = cycles.filter((c) => c.key !== currentCycleKey);
-
-  function fmtCycleLabel(start: string, end: string) {
-    const f = (s: string) => {
-      const [y, m, d] = s.split("-");
-      return `${parseInt(m)}/${parseInt(d)}/${y}`;
-    };
-    return `${f(start)} — ${f(end)}`;
-  }
 
   return (
     <div className="space-y-8">
@@ -92,21 +75,13 @@ export function CategoriesClientPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <select
-            value={selectedCycle}
-            onChange={(e) => handleCycleChange(e.target.value)}
-            disabled={isPending}
-            className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
-          >
-            <option value={currentCycleKey}>
-              {fmtCycleLabel(currentStart, currentEnd)} (current)
-            </option>
-            {otherCycles.map((c) => (
-              <option key={c.key} value={c.key}>
-                {fmtCycleLabel(c.start_date, c.end_date)}
-              </option>
-            ))}
-          </select>
+          <CycleNavigator
+            periods={periods}
+            currentKey={currentCycleKey}
+            selectedKey={selectedKey}
+            isPending={isPending}
+            onChange={handlePeriodChange}
+          />
           <button
             onClick={() => setIsModalOpen(true)}
             className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition"
