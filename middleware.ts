@@ -24,8 +24,12 @@ export async function middleware(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-pathname", pathname);
 
-  // Let login page through without auth check
-  if (pathname.startsWith("/login")) {
+  // Public routes — no session cookie required (they handle their own auth)
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/api/ingest") ||
+    pathname.startsWith("/api/telegram")
+  ) {
     return NextResponse.next({ request: { headers: requestHeaders } });
   }
 
