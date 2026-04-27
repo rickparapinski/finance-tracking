@@ -40,3 +40,8 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+.aider*
+
+# local tool configs & generated files
+.claude/
+tree.txt
