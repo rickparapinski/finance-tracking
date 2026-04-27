@@ -27,6 +27,8 @@ services:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       APP_PASSWORD: ${APP_PASSWORD}
       APP_SECRET: ${APP_SECRET}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      INGEST_SECRET: ${INGEST_SECRET}
     depends_on:
       db:
         condition: service_healthy

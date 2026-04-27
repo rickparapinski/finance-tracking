@@ -29,10 +29,11 @@ export default async function RootLayout({
   const isLoginPage = pathname === "/login";
 
   let accountsWithBalance: any[] = [];
+  let inboxCount = 0;
 
   if (!isLoginPage) {
     try {
-      const [accounts, txSums] = await Promise.all([
+      const [accounts, txSums, inboxRows] = await Promise.all([
         sql`
           SELECT id, name, currency, color, initial_balance, initial_balance_eur
           FROM accounts
@@ -43,7 +44,9 @@ export default async function RootLayout({
           FROM transactions
           GROUP BY account_id
         `,
+        sql`SELECT COUNT(*) AS n FROM staged_transactions WHERE status = 'pending'`,
       ]);
+      inboxCount = Number(inboxRows[0]?.n ?? 0);
 
       const eurSumMap: Record<string, number> = {};
       for (const r of txSums) eurSumMap[r.account_id] = Number(r.eur_sum);
@@ -76,7 +79,7 @@ export default async function RootLayout({
           <ClientProviders>
             <div className="flex min-h-screen">
               <aside className="hidden md:block fixed inset-y-0 left-0 z-10 w-64 border-r border-border">
-                <AppSidebar accounts={accountsWithBalance} />
+                <AppSidebar accounts={accountsWithBalance} inboxCount={inboxCount} />
               </aside>
               <main className="flex-1 md:pl-64">{children}</main>
             </div>

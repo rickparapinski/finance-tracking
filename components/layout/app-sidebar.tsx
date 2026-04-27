@@ -15,6 +15,7 @@ import {
   Eye,
   EyeOff,
   Sparkles,
+  Inbox,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { cn } from "@/lib/utils";
@@ -29,6 +30,7 @@ interface SidebarProps {
     balance: number;
     currency: string;
   }[];
+  inboxCount?: number;
 }
 
 const menuItems = [
@@ -37,11 +39,12 @@ const menuItems = [
   { label: "Forecast", icon: TrendingUp, href: "/forecast" },
   { label: "Categories", icon: LayoutList, href: "/categories" },
   { label: "Advisor", icon: Sparkles, href: "/advisor" },
+  { label: "Inbox", icon: Inbox, href: "/inbox" },
   { label: "Manage Accounts", icon: Wallet, href: "/accounts" },
   { label: "Import Data", icon: UploadCloud, href: "/import" },
 ];
 
-export function AppSidebar({ accounts }: SidebarProps) {
+export function AppSidebar({ accounts, inboxCount = 0 }: SidebarProps) {
   const pathname = usePathname();
   const { hidden, toggle } = useHideBalances();
 
@@ -78,6 +81,11 @@ export function AppSidebar({ accounts }: SidebarProps) {
               >
                 <item.icon size={18} />
                 {item.label}
+                {item.href === "/inbox" && inboxCount > 0 && (
+                  <span className="ml-auto text-[10px] font-bold leading-none bg-rose-500 text-white rounded-full px-1.5 py-0.5 min-w-[18px] text-center">
+                    {inboxCount}
+                  </span>
+                )}
               </Link>
             );
           })}

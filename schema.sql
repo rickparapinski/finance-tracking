@@ -113,6 +113,21 @@ ALTER TABLE accounts ADD COLUMN IF NOT EXISTS monthly_payment   DECIMAL(12,2);
 ALTER TABLE transactions ADD COLUMN IF NOT EXISTS tag TEXT;
 CREATE INDEX IF NOT EXISTS idx_transactions_tag ON transactions(tag);
 
+-- Apple Wallet inbox / staged transactions
+CREATE TABLE IF NOT EXISTS staged_transactions (
+  id            UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  raw_text      TEXT        NOT NULL,
+  merchant      TEXT,
+  amount        DECIMAL(12,2),
+  currency      TEXT        DEFAULT 'EUR',
+  source        TEXT        DEFAULT 'apple_wallet',
+  status        TEXT        DEFAULT 'pending',   -- pending | confirmed | dismissed
+  created_at    TIMESTAMPTZ DEFAULT NOW(),
+  processed_at  TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_staged_status ON staged_transactions(status);
+
 -- Useful indexes
 CREATE INDEX IF NOT EXISTS idx_transactions_account_id ON transactions(account_id);
 CREATE INDEX IF NOT EXISTS idx_transactions_date       ON transactions(date);
