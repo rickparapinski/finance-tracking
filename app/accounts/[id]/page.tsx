@@ -2,6 +2,7 @@ import { sql } from "@/lib/db";
 import Link from "next/link";
 import { bankLogo } from "@/lib/bank-logo";
 import { fetchCurrentCycle } from "@/lib/fetch-cycle";
+import { buildPeriodList } from "@/lib/periods";
 import { AccountTransactionsSection } from "./transactions-section";
 
 export const revalidate = 0;
@@ -14,10 +15,11 @@ export default async function AccountDetailPage(props: {
   const { start, end, key } = await fetchCurrentCycle();
   const startStr = start.toISOString().slice(0, 10);
   const endStr = end.toISOString().slice(0, 10);
+  const periods = buildPeriodList(startStr, endStr, key);
 
   const [account] = await sql`SELECT * FROM accounts WHERE id = ${accountId}`;
 
-  const [transactions, categoriesRows, allAccounts, txSum, cycles] = await Promise.all([
+  const [transactions, categoriesRows, allAccounts, txSum] = await Promise.all([
     sql`
       SELECT * FROM transactions
       WHERE account_id = ${accountId}
@@ -32,7 +34,6 @@ export default async function AccountDetailPage(props: {
         COALESCE(SUM(amount_eur), 0) AS eur_total
       FROM transactions WHERE account_id = ${accountId}
     `,
-    sql`SELECT key, start_date, end_date FROM cycles ORDER BY start_date DESC LIMIT 12`,
   ]);
 
   const categories = categoriesRows.map((c: any) => c.name);
@@ -193,10 +194,8 @@ export default async function AccountDetailPage(props: {
       <AccountTransactionsSection
         accountId={accountId}
         initialTransactions={transactions as any[]}
-        cycles={cycles as any[]}
+        periods={periods}
         currentCycleKey={key}
-        currentStart={startStr}
-        currentEnd={endStr}
         categories={categories}
         accounts={allAccounts.map((a: any) => ({ id: a.id, name: a.name, currency: a.currency || "EUR" }))}
         uncategorizedCount={uncategorizedCount}
