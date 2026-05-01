@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+@theme {
+  /* ── Design system colors ─────────────────────────────── */
+  --color-ink:        #1F1F1F;   /* primary text + warning slab */
+  --color-ink-soft:   #5A5A5A;   /* secondary text */
+  --color-cream:      #F4EFE3;   /* page background */
+  --color-cream-soft: #FAF7EC;   /* text-on-ink (warning state) */
+  --color-lime:       #C5F03A;   /* hero accent */
+  --color-surface:    #FFFFFF;   /* card background */
+  --color-gold:       #F5C842;   /* celebration only */
+
+  /* Nah mascot — never use in UI chrome */
+  --color-nah-body:   #6BAA8E;
+  --color-nah-shade:  #3D7A66;
+  --color-nah-light:  #ABDABF;
+  --color-nah-cheek:  #FF8FAB;
+
+  /* ── Design system fonts ──────────────────────────────── */
+  --font-pixel:      var(--font-pixelify-sans), "Pixelify Sans", monospace;
+  --font-mono:       var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+}
+
 :root {
   /* Cards */
   --card: 0 0% 100%;
@@ -98,7 +119,15 @@
 }
 
 body {
-  background-color: rgb(var(--app-bg));
+  background-color: var(--color-cream);
   color: var(--color-foreground);
   font-family: var(--font-geist-sans), sans-serif;
+}
+
+@keyframes nah-idle {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-4px); }
+}
+.nah-idle {
+  animation: nah-idle 2.8s ease-in-out infinite;
 }
