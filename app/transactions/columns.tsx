@@ -21,7 +21,7 @@ function fmtDate(raw: string) {
   const d = new Date(raw.split("T")[0] + "T00:00:00");
   return {
     day: d.toLocaleDateString("en-GB", { day: "2-digit" }),
-    mon: d.toLocaleDateString("en-GB", { month: "short" }).toUpperCase(),
+    mon: d.toLocaleDateString("en-GB", { month: "short" }).toLowerCase(),
   };
 }
 
@@ -120,7 +120,7 @@ export const columns: ColumnDef<Transaction>[] = [
         // Hierarchy: large pixel day number, tiny mono month below
         <div className="text-center w-9 shrink-0">
           <div className="font-pixel text-[17px] text-ink leading-none">{day}</div>
-          <div className="font-mono text-[9px] text-ink/40 uppercase tracking-widest mt-0.5">{mon}</div>
+          <div className="font-mono text-[9px] text-ink/40 tracking-widest mt-0.5">{mon}</div>
         </div>
       );
     },
@@ -175,13 +175,15 @@ export const columns: ColumnDef<Transaction>[] = [
     accessorKey: "amount",
     header: "amount",
     cell: ({ row }) => {
-      const amount = row.original.amount;
+      const amount    = row.original.amount;
       const amountEur = (row.original as any).amount_eur;
-      const currency = (row.original as any).original_currency || "EUR";
-      const isNonEur = currency && currency !== "EUR";
+      const currency  = (row.original as any).original_currency || "EUR";
+      const isNonEur  = currency && currency !== "EUR";
       const isPositive = amount > 0;
-      // Bold when >100€ absolute value
-      const isBig = Math.abs(amountEur ?? amount) > 100;
+      // Use explicit Number() to handle postgres Decimal objects / strings.
+      // Fall back to amount only when amount_eur is null/undefined (not 0).
+      const eurVal = amountEur != null ? Number(amountEur) : Number(amount);
+      const isBig  = !isNaN(eurVal) && Math.abs(eurVal) > 100;
 
       return (
         <div className="text-right">
