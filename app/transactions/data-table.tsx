@@ -30,6 +30,12 @@ interface DataTableProps {
   accounts: { id: string; name: string }[];
   allTags?: string[];
   uncategorizedCount?: number;
+  /** Current billing cycle start/end (YYYY-MM-DD). Replaces "month" preset. */
+  cycleFrom?: string;
+  cycleTo?: string;
+  /** Previous billing cycle. Replaces "last month" preset. */
+  prevCycleFrom?: string;
+  prevCycleTo?: string;
 }
 
 const fmt = (n: number) =>
@@ -45,26 +51,8 @@ function daysAgo(n: number) {
   const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10);
 }
 function startOfYear() { return `${new Date().getFullYear()}-01-01`; }
-function startOfMonth() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
-function startOfLastMonth() {
-  const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
-}
-function endOfLastMonth() {
-  const d = new Date(); d.setDate(0); return d.toISOString().slice(0, 10);
-}
 
-const PRESETS = [
-  { label: "7d",         from: () => daysAgo(7),    to: today },
-  { label: "30d",        from: () => daysAgo(30),   to: today },
-  { label: "month",      from: startOfMonth,        to: today },
-  { label: "last month", from: startOfLastMonth,    to: endOfLastMonth },
-  { label: "ytd",        from: startOfYear,         to: today },
-  { label: "all",        from: () => "",            to: () => "" },
-] as const;
+type Preset = { label: string; from: () => string; to: () => string };
 
 /**
  * On-time = transaction was logged (created_at) within 36h of the transaction date start.
@@ -89,7 +77,20 @@ export function DataTable({
   accounts,
   allTags = [],
   uncategorizedCount = 0,
+  cycleFrom = "",
+  cycleTo = "",
+  prevCycleFrom = "",
+  prevCycleTo = "",
 }: DataTableProps) {
+  // Build presets inside component so cycle dates from props are captured
+  const PRESETS: Preset[] = [
+    { label: "7d",         from: () => daysAgo(7),      to: today },
+    { label: "30d",        from: () => daysAgo(30),     to: today },
+    { label: "cycle",      from: () => cycleFrom,       to: () => cycleTo },
+    { label: "last cycle", from: () => prevCycleFrom,   to: () => prevCycleTo },
+    { label: "ytd",        from: startOfYear,           to: today },
+    { label: "all",        from: () => "",              to: () => "" },
+  ];
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
@@ -189,7 +190,7 @@ export function DataTable({
   const selectedCount = table.getSelectedRowModel().rows.length;
   const colCount = columnsForTable.length;
 
-  const applyPreset = (preset: (typeof PRESETS)[number]) => {
+  const applyPreset = (preset: Preset) => {
     setDateFrom(preset.from());
     setDateTo(preset.to());
     setActivePreset(preset.label);

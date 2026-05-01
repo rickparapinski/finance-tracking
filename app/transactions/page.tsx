@@ -2,12 +2,26 @@ import { sql } from "@/lib/db";
 import { DataTable } from "./data-table";
 import { columns } from "./columns";
 import { TransactionsTop } from "./transactions-top";
+import { fetchCurrentCycle } from "@/lib/fetch-cycle";
+import { getCycleStartDate } from "@/lib/finance-utils";
 import Link from "next/link";
 
 export const revalidate = 0;
 
+/** Format a Date as "YYYY-MM-DD" using UTC day (consistent with DB dates). */
+function dateStr(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 export default async function TransactionsPage() {
-  const [transactions, accounts, categories, tagRows, lastLogRow] = await Promise.all([
+  const [
+    transactions,
+    accounts,
+    categories,
+    tagRows,
+    lastLogRow,
+    { start: cycleStart, end: cycleEnd },
+  ] = await Promise.all([
     sql`
       SELECT t.*, json_build_object('name', a.name) AS accounts
       FROM transactions t
@@ -18,6 +32,7 @@ export default async function TransactionsPage() {
     sql`SELECT id, name FROM categories ORDER BY name ASC`,
     sql`SELECT DISTINCT tag FROM transactions WHERE tag IS NOT NULL ORDER BY tag`,
     sql`SELECT MAX(date) AS last_date FROM transactions`,
+    fetchCurrentCycle(),
   ]);
 
   const allTags = tagRows.map((r: any) => r.tag as string);
@@ -32,6 +47,16 @@ export default async function TransactionsPage() {
       (now.setHours(0, 0, 0, 0) - last.setHours(0, 0, 0, 0)) / 86_400_000,
     );
   }
+
+  // ── Previous cycle ─────────────────────────────────────────────────────
+  // prevCycleEnd = day before current cycle started
+  const prevCycleEnd = new Date(cycleStart);
+  prevCycleEnd.setUTCDate(prevCycleEnd.getUTCDate() - 1);
+  // prevCycleStart = getCycleStartDate for the month before prevCycleEnd's month
+  const prevCycleStart = getCycleStartDate(
+    prevCycleEnd.getUTCFullYear(),
+    prevCycleEnd.getUTCMonth() - 1,
+  );
 
   const uncategorizedCount = transactions.filter(
     (t: any) =>
@@ -75,6 +100,10 @@ export default async function TransactionsPage() {
           accounts={accounts.map((a: any) => ({ id: a.id, name: a.name }))}
           allTags={allTags}
           uncategorizedCount={uncategorizedCount}
+          cycleFrom={dateStr(cycleStart)}
+          cycleTo={dateStr(cycleEnd)}
+          prevCycleFrom={dateStr(prevCycleStart)}
+          prevCycleTo={dateStr(prevCycleEnd)}
         />
       )}
     </main>
