@@ -1,17 +1,26 @@
 "use client";
 
 import {
-  ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel,
-  getSortedRowModel, getPaginationRowModel, SortingState,
-  useReactTable, RowSelectionState,
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  getPaginationRowModel,
+  SortingState,
+  useReactTable,
+  RowSelectionState,
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { Transaction } from "@/lib/adapters/types";
 import { EditModal } from "./edit-modal";
 import {
-  bulkAssignCategory, bulkSetTag, setTransactionTag, createTransactionLink,
+  bulkAssignCategory,
+  bulkSetTag,
+  setTransactionTag,
+  createTransactionLink,
 } from "./actions";
-import { Tag } from "lucide-react";
+import { Tag, Rows3 } from "lucide-react";
 import { DateRangePicker } from "@/components/date-range-picker";
 
 interface DataTableProps {
@@ -24,93 +33,121 @@ interface DataTableProps {
 }
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR", minimumFractionDigits: 2 }).format(n);
+  new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 2,
+  }).format(n);
 
-// ── Quick date preset helpers ──────────────────────────────────────
+// ── Date preset helpers ────────────────────────────────────────────────────
 function today() { return new Date().toISOString().slice(0, 10); }
 function daysAgo(n: number) {
   const d = new Date(); d.setDate(d.getDate() - n); return d.toISOString().slice(0, 10);
 }
 function startOfYear() { return `${new Date().getFullYear()}-01-01`; }
 function startOfMonth() {
-  const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 function startOfLastMonth() {
   const d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 function endOfLastMonth() {
-  const d = new Date(); d.setDate(0);
-  return d.toISOString().slice(0, 10);
+  const d = new Date(); d.setDate(0); return d.toISOString().slice(0, 10);
 }
 
 const PRESETS = [
-  { label: "7d",   from: () => daysAgo(7),        to: today },
-  { label: "30d",  from: () => daysAgo(30),        to: today },
-  { label: "Month", from: startOfMonth,             to: today },
-  { label: "Last month", from: startOfLastMonth,   to: endOfLastMonth },
-  { label: "YTD",  from: startOfYear,              to: today },
-  { label: "All",  from: () => "",                 to: () => "" },
+  { label: "7d",         from: () => daysAgo(7),    to: today },
+  { label: "30d",        from: () => daysAgo(30),   to: today },
+  { label: "month",      from: startOfMonth,        to: today },
+  { label: "last month", from: startOfLastMonth,    to: endOfLastMonth },
+  { label: "ytd",        from: startOfYear,         to: today },
+  { label: "all",        from: () => "",            to: () => "" },
 ] as const;
 
+// ── Component ──────────────────────────────────────────────────────────────
+
 export function DataTable({
-  columns, data, categories, accounts, allTags = [], uncategorizedCount = 0,
+  columns,
+  data,
+  categories,
+  accounts,
+  allTags = [],
+  uncategorizedCount = 0,
 }: DataTableProps) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [selectMode, setSelectMode] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [showOnlyUncategorized, setShowOnlyUncategorized] = useState(false);
   const [activeTagFilter, setActiveTagFilter] = useState<string | null>(null);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [activePreset, setActivePreset] = useState<string>("All");
+  const [activePreset, setActivePreset] = useState<string>("all");
   const [bulkTagValue, setBulkTagValue] = useState("");
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [isBulkTagLoading, setIsBulkTagLoading] = useState(false);
-  const [selectedLinkType, setSelectedLinkType] = useState<"transfer" | "settlement" | "statement_payment" | "refund">("transfer");
+  const [selectedLinkType, setSelectedLinkType] = useState<
+    "transfer" | "settlement" | "statement_payment" | "refund"
+  >("transfer");
   const [isLinkLoading, setIsLinkLoading] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // ── Filter data ───────────────────────────────────────────────────
+  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  // ── Filter data ──────────────────────────────────────────────────────────
   const visibleData = useMemo(() => {
     let d = data;
     if (showOnlyUncategorized)
-      d = d.filter((t) => !t.category || t.category.trim() === "" || t.category === "Uncategorized");
+      d = d.filter(
+        (t) => !t.category || t.category.trim() === "" || t.category === "Uncategorized",
+      );
     if (activeTagFilter) d = d.filter((t) => (t as any).tag === activeTagFilter);
     if (dateFrom) d = d.filter((t) => t.date.split("T")[0] >= dateFrom);
     if (dateTo) d = d.filter((t) => t.date.split("T")[0] <= dateTo);
     return d;
   }, [data, showOnlyUncategorized, activeTagFilter, dateFrom, dateTo]);
 
-  // ── Checkbox column ───────────────────────────────────────────────
-  const selectionColumn = useMemo<ColumnDef<Transaction>>(() => ({
-    id: "select",
-    header: ({ table }) => (
-      <input type="checkbox"
-        checked={table.getIsAllPageRowsSelected()}
-        ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected(); }}
-        onChange={table.getToggleAllPageRowsSelectedHandler()}
-        className="accent-indigo-600"
-      />
-    ),
-    cell: ({ row }) => (
-      <input type="checkbox"
-        checked={row.getIsSelected()}
-        disabled={!row.getCanSelect()}
-        onChange={row.getToggleSelectedHandler()}
-        className="accent-indigo-600"
-      />
-    ),
-    enableSorting: false, enableHiding: false, size: 30,
-  }), []);
+  // ── Checkbox column ──────────────────────────────────────────────────────
+  const selectionColumn = useMemo<ColumnDef<Transaction>>(
+    () => ({
+      id: "select",
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          checked={table.getIsAllPageRowsSelected()}
+          ref={(el) => { if (el) el.indeterminate = table.getIsSomePageRowsSelected(); }}
+          onChange={table.getToggleAllPageRowsSelectedHandler()}
+          className="accent-ink w-3.5 h-3.5"
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={row.getIsSelected()}
+          disabled={!row.getCanSelect()}
+          onChange={row.getToggleSelectedHandler()}
+          className="accent-ink w-3.5 h-3.5"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+      size: 28,
+    }),
+    [],
+  );
 
-  const columnsWithSelection = useMemo(() => [selectionColumn, ...columns], [selectionColumn, columns]);
+  const columnsForTable = useMemo(
+    () => (selectMode ? [selectionColumn, ...columns] : columns),
+    [selectMode, selectionColumn, columns],
+  );
 
   const table = useReactTable({
     data: visibleData,
-    columns: columnsWithSelection,
+    columns: columnsForTable,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -127,7 +164,7 @@ export function DataTable({
     },
   });
 
-  // ── Subtotals from ALL filtered rows (not just current page) ──────
+  // ── Subtotals ────────────────────────────────────────────────────────────
   const subtotals = useMemo(() => {
     const rows = table.getFilteredRowModel().rows;
     let income = 0, expenses = 0;
@@ -136,15 +173,20 @@ export function DataTable({
       if (amt > 0) income += amt; else expenses += amt;
     }
     return { income, expenses, net: income + expenses, count: rows.length };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table.getFilteredRowModel().rows.length, visibleData, globalFilter]);
 
   const selectedCount = table.getSelectedRowModel().rows.length;
+  const colCount = columnsForTable.length;
 
-  const applyPreset = (preset: typeof PRESETS[number]) => {
+  const applyPreset = (preset: (typeof PRESETS)[number]) => {
     setDateFrom(preset.from());
     setDateTo(preset.to());
     setActivePreset(preset.label);
+  };
+
+  const toggleSelectMode = () => {
+    setSelectMode((v) => { if (v) setRowSelection({}); return !v; });
   };
 
   return (
@@ -158,271 +200,299 @@ export function DataTable({
         allTags={allTags}
       />
 
-      {/* ── Toolbar ── */}
-      <div className="rounded-[var(--radius)] bg-white shadow-[var(--shadow-softer)] p-4 space-y-3">
+      {/* ── Single unified card: toolbar + table ── */}
+      <div className="bg-surface border-2 border-ink rounded-md shadow-[2px_2px_0_rgba(31,31,31,0.09)] overflow-hidden">
 
-        {/* Row 1: Search + date range */}
-        <div className="flex flex-wrap items-center gap-3">
-          <input
-            placeholder="Search transactions…"
-            value={globalFilter ?? ""}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            className="h-9 min-w-[200px] flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent transition"
-          />
-          <DateRangePicker
-            from={dateFrom}
-            to={dateTo}
-            onChange={(from, to) => {
-              setDateFrom(from);
-              setDateTo(to);
-              setActivePreset("");
-            }}
-          />
-        </div>
+        {/* Toolbar */}
+        <div className="p-3 space-y-2.5">
 
-        {/* Row 2: Presets + uncategorized + count */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex items-center gap-1.5">
-            {PRESETS.map((p) => (
-              <button
-                key={p.label}
-                onClick={() => applyPreset(p)}
-                className={`h-7 rounded-lg px-2.5 text-xs font-medium transition ${
-                  activePreset === p.label
-                    ? "bg-indigo-600 text-white"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center gap-3">
-            {uncategorizedCount > 0 && (
-              <label className="flex items-center gap-1.5 text-xs text-slate-500 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={showOnlyUncategorized}
-                  onChange={(e) => { setShowOnlyUncategorized(e.target.checked); setRowSelection({}); }}
-                  className="accent-amber-500"
-                />
-                Uncategorized ({uncategorizedCount})
-              </label>
-            )}
-            <span className="text-xs text-slate-400">
-              {table.getRowModel().rows.length} of {visibleData.length}
-            </span>
-          </div>
-        </div>
-
-        {/* Tag filter pills */}
-        {allTags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Tag className="w-3 h-3 text-slate-400 shrink-0" />
-            {allTags.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => setActiveTagFilter(activeTagFilter === tag ? null : tag)}
-                className={`h-6 rounded-full px-2.5 text-[11px] font-medium border transition ${
-                  activeTagFilter === tag
-                    ? "bg-indigo-600 border-indigo-600 text-white"
-                    : "bg-indigo-50 border-indigo-100 text-indigo-700 hover:bg-indigo-100"
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Bulk operations — only show when rows are selected */}
-        {selectedCount > 0 && (
-          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-slate-100">
-            <span className="text-xs font-medium text-slate-500">{selectedCount} selected:</span>
-
-            {/* Bulk category */}
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="h-8 rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            >
-              <option value="">Assign category…</option>
-              {categories.filter((c) => c !== "Uncategorized").map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-            <button
-              disabled={isBulkLoading || !selectedCategory}
-              onClick={async () => {
-                const ids = table.getSelectedRowModel().rows.map((r) => (r.original as any).id as string);
-                setIsBulkLoading(true);
-                try { await bulkAssignCategory(ids, selectedCategory); setRowSelection({}); }
-                finally { setIsBulkLoading(false); }
-              }}
-              className="h-8 rounded-xl bg-slate-800 px-3 text-xs font-medium text-white hover:bg-slate-900 transition disabled:opacity-50"
-            >
-              {isBulkLoading ? "Assigning…" : "Assign"}
-            </button>
-
-            <div className="h-5 w-px bg-slate-200" />
-
-            {/* Bulk tag */}
-            <datalist id="bulk-tags-list">{allTags.map((t) => <option key={t} value={t} />)}</datalist>
+          {/* Row 1: Search + date + select toggle */}
+          <div className="flex items-center gap-2">
             <input
-              list="bulk-tags-list"
-              value={bulkTagValue}
-              onChange={(e) => setBulkTagValue(e.target.value)}
-              placeholder="Tag name…"
-              className="h-8 rounded-xl border border-slate-200 bg-white px-2.5 text-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-400 w-28"
+              placeholder="search transactions…"
+              value={globalFilter ?? ""}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              className="h-8 min-w-[180px] flex-1 border-2 border-ink/20 rounded-md bg-cream px-3 font-sans text-[12px] text-ink placeholder:text-ink/30 focus:outline-none focus:border-ink/50 transition-none"
+            />
+            <DateRangePicker
+              from={dateFrom}
+              to={dateTo}
+              onChange={(from, to) => {
+                setDateFrom(from);
+                setDateTo(to);
+                setActivePreset("");
+              }}
             />
             <button
-              disabled={isBulkTagLoading || !bulkTagValue.trim()}
-              onClick={async () => {
-                const ids = table.getSelectedRowModel().rows.map((r) => (r.original as any).id as string);
-                setIsBulkTagLoading(true);
-                try { await bulkSetTag(ids, bulkTagValue.trim()); setRowSelection({}); setBulkTagValue(""); }
-                finally { setIsBulkTagLoading(false); }
-              }}
-              className="h-8 rounded-xl bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-700 transition disabled:opacity-50"
+              onClick={toggleSelectMode}
+              title="Toggle select mode for bulk operations"
+              className={`flex items-center gap-1.5 h-8 px-2.5 border-2 rounded-md font-pixel text-[10px] transition-none shrink-0 ${
+                selectMode
+                  ? "border-ink bg-ink text-cream-soft"
+                  : "border-ink/20 text-ink/40 hover:border-ink/40 hover:text-ink/60"
+              }`}
             >
-              {isBulkTagLoading ? "Tagging…" : "Tag"}
-            </button>
-
-            <div className="h-5 w-px bg-slate-200" />
-
-            {/* Link */}
-            <select
-              value={selectedLinkType}
-              onChange={(e) => setSelectedLinkType(e.target.value as any)}
-              className="h-8 rounded-xl border border-slate-200 bg-white px-2.5 text-xs text-slate-900 focus:outline-none"
-            >
-              <option value="transfer">Transfer</option>
-              <option value="settlement">Settlement</option>
-              <option value="statement_payment">Statement payment</option>
-              <option value="refund">Refund</option>
-            </select>
-            <button
-              disabled={isLinkLoading || selectedCount !== 2}
-              onClick={async () => {
-                const rows = table.getSelectedRowModel().rows;
-                if (rows.length !== 2) return;
-                setIsLinkLoading(true);
-                try {
-                  await createTransactionLink({
-                    leftId: (rows[0].original as any).id,
-                    rightId: (rows[1].original as any).id,
-                    linkType: selectedLinkType,
-                  });
-                  setRowSelection({});
-                } finally { setIsLinkLoading(false); }
-              }}
-              className="h-8 rounded-xl bg-violet-600 px-3 text-xs font-medium text-white hover:bg-violet-700 transition disabled:opacity-50"
-            >
-              {isLinkLoading ? "Linking…" : "Link 2"}
-            </button>
-
-            <button
-              onClick={() => setRowSelection({})}
-              className="h-8 rounded-xl border border-slate-200 px-3 text-xs font-medium text-slate-600 hover:bg-slate-100 transition"
-            >
-              Clear
+              <Rows3 size={11} className="shrink-0" />
+              select
             </button>
           </div>
-        )}
-      </div>
 
-      {/* ── Table ── */}
-      <div className="rounded-[var(--radius)] bg-white shadow-[var(--shadow-softer)] overflow-hidden">
-        <table className="w-full text-sm">
-          <thead className="bg-slate-50 border-b border-slate-100">
-            {table.getHeaderGroups().map((hg) => (
-              <tr key={hg.id}>
-                {hg.headers.map((h) => (
-                  <th
-                    key={h.id}
-                    onClick={h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined}
-                    className={`px-4 py-2.5 text-left text-xs font-bold text-slate-500 uppercase tracking-wider whitespace-nowrap select-none ${
-                      h.column.getCanSort() ? "cursor-pointer hover:text-slate-800" : ""
-                    }`}
-                  >
-                    <div className="flex items-center gap-1">
-                      {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
-                      {h.column.getIsSorted() === "asc" && <span>↑</span>}
-                      {h.column.getIsSorted() === "desc" && <span>↓</span>}
-                    </div>
-                  </th>
+          {/* Row 2: Presets + count */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-0">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  onClick={() => applyPreset(p)}
+                  className={`font-pixel text-[10px] px-2.5 py-1.5 border-b-2 transition-none ${
+                    activePreset === p.label
+                      ? "border-lime text-ink"
+                      : "border-transparent text-ink/35 hover:text-ink/60 hover:border-ink/20"
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              {uncategorizedCount > 0 && (
+                <label className="flex items-center gap-1.5 font-sans text-[11px] text-ink/45 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showOnlyUncategorized}
+                    onChange={(e) => { setShowOnlyUncategorized(e.target.checked); setRowSelection({}); }}
+                    className="accent-ink w-3 h-3"
+                  />
+                  uncategorized ({uncategorizedCount})
+                </label>
+              )}
+              <span className="font-mono text-[10px] text-ink/30">
+                {table.getRowModel().rows.length} / {visibleData.length}
+              </span>
+            </div>
+          </div>
+
+          {/* Tag filter pills */}
+          {allTags.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Tag className="w-3 h-3 text-ink/25 shrink-0" />
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setActiveTagFilter(activeTagFilter === tag ? null : tag)}
+                  className={`h-6 border-2 rounded-md px-2 font-mono text-[10px] transition-none ${
+                    activeTagFilter === tag
+                      ? "border-ink bg-ink text-cream-soft"
+                      : "border-ink/20 text-ink/45 hover:border-ink/40 hover:text-ink/65"
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Bulk operations */}
+          {selectMode && selectedCount > 0 && (
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t-2 border-ink/8">
+              <span className="font-pixel text-[10px] text-ink/40">{selectedCount} selected:</span>
+
+              <select
+                value={selectedCategory}
+                onChange={(e) => setSelectedCategory(e.target.value)}
+                className="h-7 border-2 border-ink/25 rounded-md bg-white px-2 font-sans text-[11px] text-ink focus:outline-none focus:border-ink/50"
+              >
+                <option value="">assign category…</option>
+                {categories.filter((c) => c !== "Uncategorized").map((c) => (
+                  <option key={c} value={c}>{c}</option>
                 ))}
-              </tr>
-            ))}
-          </thead>
+              </select>
+              <button
+                disabled={isBulkLoading || !selectedCategory}
+                onClick={async () => {
+                  const ids = table.getSelectedRowModel().rows.map((r) => (r.original as any).id as string);
+                  setIsBulkLoading(true);
+                  try { await bulkAssignCategory(ids, selectedCategory); setRowSelection({}); }
+                  finally { setIsBulkLoading(false); }
+                }}
+                className="h-7 border-2 border-ink bg-lime text-ink px-2.5 font-pixel text-[10px] rounded-md shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_#1F1F1F] disabled:opacity-40 disabled:pointer-events-none transition-none"
+              >
+                {isBulkLoading ? "assigning…" : "assign"}
+              </button>
 
-          <tbody className="divide-y divide-slate-50">
-            {table.getRowModel().rows.length ? (
-              table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="group hover:bg-slate-50/60 transition-colors">
-                  {row.getVisibleCells().map((cell) => (
-                    <td key={cell.id} className="px-4 py-3">
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
+              <div className="h-4 w-px bg-ink/15" />
+
+              <datalist id="bulk-tags-list">{allTags.map((t) => <option key={t} value={t} />)}</datalist>
+              <input
+                list="bulk-tags-list"
+                value={bulkTagValue}
+                onChange={(e) => setBulkTagValue(e.target.value)}
+                placeholder="tag name…"
+                className="h-7 w-28 border-2 border-ink/25 rounded-md bg-white px-2 font-mono text-[11px] placeholder:text-ink/25 focus:outline-none focus:border-ink/50"
+              />
+              <button
+                disabled={isBulkTagLoading || !bulkTagValue.trim()}
+                onClick={async () => {
+                  const ids = table.getSelectedRowModel().rows.map((r) => (r.original as any).id as string);
+                  setIsBulkTagLoading(true);
+                  try { await bulkSetTag(ids, bulkTagValue.trim()); setRowSelection({}); setBulkTagValue(""); }
+                  finally { setIsBulkTagLoading(false); }
+                }}
+                className="h-7 border-2 border-ink/30 text-ink px-2.5 font-pixel text-[10px] rounded-md hover:border-ink/60 disabled:opacity-40 disabled:pointer-events-none transition-none"
+              >
+                {isBulkTagLoading ? "tagging…" : "tag"}
+              </button>
+
+              <div className="h-4 w-px bg-ink/15" />
+
+              <select
+                value={selectedLinkType}
+                onChange={(e) => setSelectedLinkType(e.target.value as any)}
+                className="h-7 border-2 border-ink/25 rounded-md bg-white px-2 font-sans text-[11px] text-ink focus:outline-none"
+              >
+                <option value="transfer">Transfer</option>
+                <option value="settlement">Settlement</option>
+                <option value="statement_payment">Statement payment</option>
+                <option value="refund">Refund</option>
+              </select>
+              <button
+                disabled={isLinkLoading || selectedCount !== 2}
+                onClick={async () => {
+                  const rows = table.getSelectedRowModel().rows;
+                  if (rows.length !== 2) return;
+                  setIsLinkLoading(true);
+                  try {
+                    await createTransactionLink({
+                      leftId: (rows[0].original as any).id,
+                      rightId: (rows[1].original as any).id,
+                      linkType: selectedLinkType,
+                    });
+                    setRowSelection({});
+                  } finally { setIsLinkLoading(false); }
+                }}
+                className="h-7 border-2 border-ink/30 text-ink px-2.5 font-pixel text-[10px] rounded-md hover:border-ink/60 disabled:opacity-40 disabled:pointer-events-none transition-none"
+              >
+                {isLinkLoading ? "linking…" : "link 2"}
+              </button>
+
+              <button
+                onClick={() => setRowSelection({})}
+                className="h-7 border-2 border-ink/15 text-ink/40 px-2.5 font-pixel text-[10px] rounded-md hover:border-ink/30 hover:text-ink/60 transition-none"
+              >
+                clear
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── Table — flush inside the card, hairline top divider ── */}
+        <div className="border-t border-ink/10 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-ink/3">
+              {table.getHeaderGroups().map((hg) => (
+                <tr key={hg.id}>
+                  {hg.headers.map((h) => (
+                    <th
+                      key={h.id}
+                      onClick={h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined}
+                      className={`px-4 py-2.5 text-left font-pixel text-[10px] text-ink/35 whitespace-nowrap select-none ${
+                        h.column.getCanSort() ? "cursor-pointer hover:text-ink/60" : ""
+                      } ${h.id === "amount" ? "text-right" : ""}`}
+                    >
+                      <div className={`flex items-center gap-1 ${h.id === "amount" ? "justify-end" : ""}`}>
+                        {h.isPlaceholder ? null : flexRender(h.column.columnDef.header, h.getContext())}
+                        {h.column.getIsSorted() === "asc" && <span className="text-lime">↑</span>}
+                        {h.column.getIsSorted() === "desc" && <span className="text-lime">↓</span>}
+                      </div>
+                    </th>
                   ))}
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan={columnsWithSelection.length} className="py-16 text-center text-sm text-slate-400">
-                  No transactions match the current filters.
-                </td>
-              </tr>
-            )}
-          </tbody>
+              ))}
+            </thead>
 
-          {/* ── Subtotals footer ── */}
-          {subtotals.count > 0 && (
-            <tfoot>
-              <tr className="border-t border-slate-200 bg-slate-50/80">
-                <td colSpan={columnsWithSelection.length - 1} className="px-4 py-3">
-                  <div className="flex items-center gap-5 text-xs text-slate-500">
-                    <span className="font-medium">{subtotals.count} transaction{subtotals.count !== 1 ? "s" : ""}</span>
-                    <span>
-                      <span className="text-slate-400">In </span>
-                      <span className="font-semibold text-emerald-600 tabular-nums font-mono">{fmt(subtotals.income)}</span>
+            <tbody className="divide-y divide-cream-soft">
+              {table.getRowModel().rows.length ? (
+                table.getRowModel().rows.map((row) => {
+                  const isToday = row.original.date.slice(0, 10) === todayStr;
+                  return (
+                    <tr
+                      key={row.id}
+                      className={`group hover:bg-cream-soft transition-none border-l-2 ${
+                        isToday ? "border-lime" : "border-transparent"
+                      }`}
+                    >
+                      {row.getVisibleCells().map((cell) => (
+                        <td
+                          key={cell.id}
+                          className={`px-4 py-2.5 ${cell.column.id === "amount" ? "text-right" : ""}`}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={colCount} className="py-16 text-center font-pixel text-[11px] text-ink/25">
+                    no transactions match.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+
+            {/* ── Subtotals footer ── */}
+            {subtotals.count > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-ink bg-ink/3">
+                  <td colSpan={colCount - 1} className="px-4 py-3">
+                    <div className="flex items-center gap-5">
+                      <span className="font-mono text-[11px] text-ink/40">
+                        {subtotals.count} tx
+                      </span>
+                      <span className="font-mono text-[12px]">
+                        <span className="text-ink/30 mr-1">↑</span>
+                        <span className="text-lime font-semibold tabular-nums">{fmt(subtotals.income)}</span>
+                      </span>
+                      <span className="font-mono text-[12px]">
+                        <span className="text-ink/30 mr-1">↓</span>
+                        <span className="text-ink/60 font-semibold tabular-nums">{fmt(subtotals.expenses)}</span>
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 text-right">
+                    <span className={`font-mono text-[14px] font-bold tabular-nums ${
+                      subtotals.net >= 0 ? "text-lime" : "text-ink/80"
+                    }`}>
+                      {subtotals.net >= 0 ? "↑" : "↓"} {fmt(Math.abs(subtotals.net))}
                     </span>
-                    <span>
-                      <span className="text-slate-400">Out </span>
-                      <span className="font-semibold text-rose-600 tabular-nums font-mono">{fmt(subtotals.expenses)}</span>
-                    </span>
-                  </div>
-                </td>
-                <td className="px-4 py-3 text-right">
-                  <span className={`text-sm font-bold tabular-nums font-mono ${subtotals.net >= 0 ? "text-emerald-700" : "text-rose-700"}`}>
-                    {fmt(subtotals.net)}
-                  </span>
-                </td>
-              </tr>
-            </tfoot>
-          )}
-        </table>
+                  </td>
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
       </div>
 
       {/* ── Pagination ── */}
-      <div className="flex items-center justify-between py-2 px-1">
-        <span className="text-xs text-slate-400">
-          Page {table.getState().pagination.pageIndex + 1} of {table.getPageCount()}
+      <div className="flex items-center justify-between py-1 px-1">
+        <span className="font-pixel text-[10px] text-ink/30">
+          page {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
         </span>
         <div className="flex items-center gap-2">
           <button
             onClick={() => table.previousPage()}
             disabled={!table.getCanPreviousPage()}
-            className="h-8 rounded-xl border border-slate-200 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition"
+            className="h-7 border-2 border-ink/20 rounded-md px-3 font-pixel text-[10px] text-ink/50 hover:border-ink/50 hover:text-ink disabled:opacity-30 disabled:pointer-events-none transition-none"
           >
-            ← Previous
+            ← prev
           </button>
           <button
             onClick={() => table.nextPage()}
             disabled={!table.getCanNextPage()}
-            className="h-8 rounded-xl border border-slate-200 px-3 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-40 transition"
+            className="h-7 border-2 border-ink/20 rounded-md px-3 font-pixel text-[10px] text-ink/50 hover:border-ink/50 hover:text-ink disabled:opacity-30 disabled:pointer-events-none transition-none"
           >
-            Next →
+            next →
           </button>
         </div>
       </div>
