@@ -7,7 +7,7 @@ import Link from "next/link";
 export const revalidate = 0;
 
 export default async function TransactionsPage() {
-  const [transactions, accounts, categories, tagRows] = await Promise.all([
+  const [transactions, accounts, categories, tagRows, lastLogRow] = await Promise.all([
     sql`
       SELECT t.*, json_build_object('name', a.name) AS accounts
       FROM transactions t
@@ -17,10 +17,21 @@ export default async function TransactionsPage() {
     sql`SELECT id, name, currency FROM accounts WHERE status = 'active' ORDER BY name`,
     sql`SELECT id, name FROM categories ORDER BY name ASC`,
     sql`SELECT DISTINCT tag FROM transactions WHERE tag IS NOT NULL ORDER BY tag`,
+    sql`SELECT MAX(date) AS last_date FROM transactions`,
   ]);
 
   const allTags = tagRows.map((r: any) => r.tag as string);
   const totalCount = transactions.length;
+
+  // Days since last logged transaction — drives header voice + Nah expression
+  let daysSinceLastLog = 0;
+  if (lastLogRow[0]?.last_date) {
+    const last = new Date(lastLogRow[0].last_date as string);
+    const now  = new Date();
+    daysSinceLastLog = Math.floor(
+      (now.setHours(0, 0, 0, 0) - last.setHours(0, 0, 0, 0)) / 86_400_000,
+    );
+  }
 
   const uncategorizedCount = transactions.filter(
     (t: any) =>
@@ -34,6 +45,7 @@ export default async function TransactionsPage() {
         accounts={accounts as any}
         categories={categories.map((c: any) => c.name)}
         totalCount={totalCount}
+        daysSinceLastLog={daysSinceLastLog}
       />
 
       {/* ── Uncategorized nudge ── */}
