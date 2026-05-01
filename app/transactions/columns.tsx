@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { ColumnDef, Row, Table } from "@tanstack/react-table";
 import { Transaction } from "@/lib/adapters/types";
 import { deleteTransaction } from "./actions";
-import { categoryColor } from "@/lib/category-color";
-import { Tag, X } from "lucide-react";
+import { CategoryBadge } from "@/components/ui/category-badge";
+import { X } from "lucide-react";
 
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends unknown> {
@@ -15,14 +15,32 @@ declare module "@tanstack/react-table" {
   }
 }
 
+// ── Formatters ─────────────────────────────────────────────────────────────
+
 function fmtDate(raw: string) {
   const d = new Date(raw.split("T")[0] + "T00:00:00");
   return {
     day: d.toLocaleDateString("en-GB", { day: "2-digit" }),
-    mon: d.toLocaleDateString("en-GB", { month: "short" }),
-    year: d.getFullYear(),
+    mon: d.toLocaleDateString("en-GB", { month: "short" }).toUpperCase(),
   };
 }
+
+function fmtEur(n: number, currency = "EUR") {
+  return new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency,
+    minimumFractionDigits: 2,
+  }).format(n);
+}
+
+/** Split "Wolt * Lunch" → { merchant: "Wolt", detail: "Lunch" } */
+function splitDescription(raw: string): { merchant: string; detail: string | null } {
+  const idx = raw.indexOf(" * ");
+  if (idx === -1) return { merchant: raw, detail: null };
+  return { merchant: raw.slice(0, idx), detail: raw.slice(idx + 3) };
+}
+
+// ── Tag cell ───────────────────────────────────────────────────────────────
 
 function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transaction> }) {
   const tag = (row.original as any).tag as string | null;
@@ -39,7 +57,9 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
     return (
       <>
         <datalist id="tx-tags-list">
-          {(table.options.meta?.allTags ?? []).map((t) => <option key={t} value={t} />)}
+          {(table.options.meta?.allTags ?? []).map((t) => (
+            <option key={t} value={t} />
+          ))}
         </datalist>
         <input
           autoFocus
@@ -51,8 +71,8 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
             if (e.key === "Enter") save();
             if (e.key === "Escape") setEditing(false);
           }}
-          placeholder="Add tag…"
-          className="h-6 w-28 rounded-md border border-indigo-300 bg-white px-2 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+          placeholder="add tag…"
+          className="h-6 w-24 rounded-md border-2 border-ink/30 bg-white px-2 font-mono text-[10px] text-ink focus:outline-none focus:border-ink/60"
         />
       </>
     );
@@ -62,13 +82,15 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
     return (
       <span
         onClick={() => { setVal(tag); setEditing(true); }}
-        className="inline-flex items-center gap-1 rounded-full bg-indigo-50 border border-indigo-100 px-2 py-0.5 text-[11px] font-medium text-indigo-700 cursor-pointer hover:bg-indigo-100 transition group"
+        className="inline-flex items-center gap-1 border-2 border-ink/25 rounded-md px-1.5 py-0.5 font-mono text-[10px] text-ink/50 cursor-pointer hover:border-ink/50 hover:text-ink/70 transition-none group"
       >
-        <Tag className="w-2.5 h-2.5 shrink-0" />
         {tag}
         <button
-          onClick={async (e) => { e.stopPropagation(); await table.options.meta?.setTag(String(row.original.id), null); }}
-          className="ml-0.5 opacity-0 group-hover:opacity-100 transition text-indigo-400 hover:text-rose-500"
+          onClick={async (e) => {
+            e.stopPropagation();
+            await table.options.meta?.setTag(String(row.original.id), null);
+          }}
+          className="ml-0.5 opacity-0 group-hover:opacity-100 transition-none text-ink/30 hover:text-ink"
         >
           <X className="w-2.5 h-2.5" />
         </button>
@@ -79,37 +101,47 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
   return (
     <button
       onClick={() => { setVal(""); setEditing(true); }}
-      className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-200 px-2 py-0.5 text-[11px] text-slate-400 hover:border-indigo-300 hover:text-indigo-500 transition opacity-0 group-hover:opacity-100"
+      className="inline-flex items-center border-2 border-ink/25 rounded-md px-1.5 py-0.5 font-mono text-[10px] text-ink/35 hover:border-ink/50 hover:text-ink/55 transition-none opacity-0 group-hover:opacity-100"
     >
-      <Tag className="w-2.5 h-2.5" /> tag
+      + tag
     </button>
   );
 }
 
+// ── Column definitions ─────────────────────────────────────────────────────
+
 export const columns: ColumnDef<Transaction>[] = [
   {
     accessorKey: "date",
-    header: "Date",
+    header: "date",
     cell: ({ row }) => {
       const { day, mon } = fmtDate(row.original.date);
       return (
-        <div className="text-center w-10 shrink-0">
-          <div className="text-sm font-semibold text-slate-800 leading-tight">{day}</div>
-          <div className="text-[11px] text-slate-400 uppercase tracking-wide">{mon}</div>
+        // Hierarchy: large pixel day number, tiny mono month below
+        <div className="text-center w-9 shrink-0">
+          <div className="font-pixel text-[17px] text-ink leading-none">{day}</div>
+          <div className="font-mono text-[9px] text-ink/40 uppercase tracking-widest mt-0.5">{mon}</div>
         </div>
       );
     },
   },
   {
     accessorKey: "description",
-    header: "Description",
+    header: "description",
     cell: ({ row }) => {
       const { installment_index: idx, installment_total: total } = row.original as any;
+      const { merchant, detail } = splitDescription(row.original.description ?? "");
       return (
-        <div className="min-w-[180px]">
-          <span className="text-sm font-medium text-slate-800">{row.original.description}</span>
+        <div className="min-w-[180px] flex items-baseline gap-1 flex-wrap">
+          <span className="font-sans text-[13px] text-ink/80">{merchant}</span>
+          {detail && (
+            <>
+              <span className="font-sans text-[13px] text-ink/25">·</span>
+              <span className="font-sans text-[12px] text-ink/45">{detail}</span>
+            </>
+          )}
           {idx != null && total != null && (
-            <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-semibold text-indigo-600 tabular-nums">
+            <span className="border-2 border-ink/20 rounded-md px-1 py-0.5 font-mono text-[9px] text-ink/35 tabular-nums">
               {idx}/{total}
             </span>
           )}
@@ -119,23 +151,19 @@ export const columns: ColumnDef<Transaction>[] = [
   },
   {
     accessorKey: "category",
-    header: "Category",
+    header: "category",
     cell: ({ row }) => {
       const cat = row.original.category || "Uncategorized";
-      const color = cat === "Uncategorized" ? "#94a3b8" : categoryColor(cat);
-      return (
-        <div className="flex items-center gap-1.5 whitespace-nowrap">
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-          <span className="text-xs text-slate-600">{cat}</span>
-        </div>
-      );
+      return <CategoryBadge name={cat} />;
     },
   },
   {
     accessorKey: "accounts.name",
-    header: "Account",
+    header: "account",
     cell: ({ row }) => (
-      <span className="text-xs text-slate-400 whitespace-nowrap">{(row.original as any).accounts?.name}</span>
+      <span className="font-sans text-[11px] text-ink/35 whitespace-nowrap">
+        {(row.original as any).accounts?.name}
+      </span>
     ),
   },
   {
@@ -145,21 +173,30 @@ export const columns: ColumnDef<Transaction>[] = [
   },
   {
     accessorKey: "amount",
-    header: () => <div className="text-right">Amount</div>,
+    header: "amount",
     cell: ({ row }) => {
       const amount = row.original.amount;
       const amountEur = (row.original as any).amount_eur;
       const currency = (row.original as any).original_currency || "EUR";
       const isNonEur = currency && currency !== "EUR";
-      const fmt = (n: number, cur: string) =>
-        new Intl.NumberFormat("de-DE", { style: "currency", currency: cur }).format(n);
+      const isPositive = amount > 0;
+      // Bold when >100€ absolute value
+      const isBig = Math.abs(amountEur ?? amount) > 100;
+
       return (
         <div className="text-right">
-          <span className={`font-semibold tabular-nums font-mono text-sm ${amount > 0 ? "text-emerald-600" : "text-rose-600"}`}>
-            {fmt(amount, currency || "EUR")}
+          <span
+            className={`tabular-nums font-mono text-[13px] ${isBig ? "font-bold" : "font-medium"} ${
+              isPositive ? "text-lime" : "text-ink"
+            }`}
+          >
+            <span className="text-[10px] mr-0.5 opacity-60">{isPositive ? "↑" : "↓"}</span>
+            {fmtEur(amount, currency)}
           </span>
           {isNonEur && amountEur != null && (
-            <div className="text-[10px] text-slate-400 tabular-nums">{fmt(amountEur, "EUR")}</div>
+            <div className="font-mono text-[10px] text-ink/35 tabular-nums">
+              {fmtEur(amountEur, "EUR")}
+            </div>
           )}
         </div>
       );
@@ -168,16 +205,16 @@ export const columns: ColumnDef<Transaction>[] = [
   {
     id: "actions",
     cell: ({ row, table }) => (
-      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-none">
         <button
           onClick={() => table.options.meta?.openEditModal(row.original)}
-          className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition"
+          className="border-2 border-ink/30 rounded-md px-2 py-0.5 font-mono text-[10px] text-ink/50 hover:border-ink hover:text-ink transition-none"
         >
-          Edit
+          edit
         </button>
         <form action={deleteTransaction.bind(null, row.original.id)}>
-          <button className="rounded-lg px-2.5 py-1 text-xs font-medium text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition">
-            Del
+          <button className="border-2 border-ink/20 rounded-md px-2 py-0.5 font-mono text-[10px] text-ink/35 hover:border-ink/50 hover:text-ink/60 transition-none">
+            del
           </button>
         </form>
       </div>
