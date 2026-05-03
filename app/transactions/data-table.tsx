@@ -370,7 +370,7 @@ export function DataTable({
                   <th
                     key={h.id}
                     onClick={h.column.getCanSort() ? h.column.getToggleSortingHandler() : undefined}
-                    className={`px-3 py-2 text-left font-pixel text-[10px] text-ink/40 whitespace-nowrap select-none ${
+                    className={`px-4 py-2 text-left text-xs font-mono uppercase tracking-wide text-ink/40 whitespace-nowrap select-none ${
                       h.column.getCanSort() ? "cursor-pointer hover:text-ink/70" : ""
                     } ${h.id === "amount" ? "text-right" : ""}`}
                   >
