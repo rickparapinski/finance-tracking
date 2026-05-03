@@ -12,6 +12,7 @@ import {
   RowSelectionState,
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
+import { useCountUp } from "@/hooks/use-count-up";
 import { Transaction } from "@/lib/adapters/types";
 import { EditModal } from "./edit-modal";
 import {
@@ -179,6 +180,11 @@ export function DataTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table.getFilteredRowModel().rows.length, visibleData, globalFilter]);
 
+  // ── Animated subtotals — re-run whenever filtered values change ───────────
+  const animIncome   = useCountUp(subtotals.income,               { duration: 600, delay: 320 });
+  const animExpenses = useCountUp(Math.abs(subtotals.expenses),   { duration: 600, delay: 370 });
+  const animNet      = useCountUp(Math.abs(subtotals.net),        { duration: 600, delay: 420 });
+
   const selectedCount = table.getSelectedRowModel().rows.length;
   const colCount = columnsForTable.length;
 
@@ -206,7 +212,7 @@ export function DataTable({
       />
 
       {/* ── Card 1+2 merged: search row + filter tab row ── */}
-      <div className={card}>
+      <div className={`${card} animate-slide-up`}>
         {/* Search row */}
         <div className="px-4 py-3 flex items-center gap-3 border-b border-ink/10">
           <input
@@ -361,7 +367,7 @@ export function DataTable({
       )}
 
       {/* ── Card 3: table + footer summary + pagination — fills remaining viewport ── */}
-      <div className={`${card} overflow-hidden flex flex-col min-h-[calc(100vh-260px)]`}>
+      <div className={`${card} overflow-hidden flex flex-col min-h-[calc(100vh-260px)] animate-slide-up`} style={{ animationDelay: "90ms" }}>
         <table className="w-full text-sm flex-1">
           <thead className="bg-ink/[0.03] border-b border-ink/10">
             {table.getHeaderGroups().map((hg) => (
@@ -419,12 +425,12 @@ export function DataTable({
                     <span className="text-ink/20 select-none">|</span>
                     <span className="font-mono text-[12px]">
                       <span className="text-ink/30 mr-0.5">↑</span>
-                      <span className="text-lime font-semibold tabular-nums">{fmt(subtotals.income)}</span>
+                      <span className="text-lime font-semibold tabular-nums">{fmt(animIncome)}</span>
                     </span>
                     <span className="text-ink/20 select-none">|</span>
                     <span className="font-mono text-[12px]">
                       <span className="text-ink/30 mr-0.5">↓</span>
-                      <span className="text-ink/60 font-semibold tabular-nums">{fmt(subtotals.expenses)}</span>
+                      <span className="text-ink/60 font-semibold tabular-nums">{fmt(-animExpenses)}</span>
                     </span>
                   </div>
                 </td>
@@ -432,7 +438,7 @@ export function DataTable({
                   <span className={`font-mono text-[14px] font-bold tabular-nums ${
                     subtotals.net >= 0 ? "text-lime" : "text-ink/80"
                   }`}>
-                    {subtotals.net >= 0 ? "↑" : "↓"} {fmt(Math.abs(subtotals.net))}
+                    {subtotals.net >= 0 ? "↑" : "↓"} {fmt(animNet)}
                   </span>
                 </td>
               </tr>

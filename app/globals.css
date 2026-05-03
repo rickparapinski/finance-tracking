@@ -131,3 +131,17 @@ body {
 .nah-idle {
   animation: nah-idle 2.8s ease-in-out infinite;
 }
+
+/* ── Entrance animations ─────────────────────────────── */
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/** Segmented bar — each segment grows from the left */
+@keyframes seg-pop {
+  from { opacity: 0; transform: scaleX(0.15); }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+.animate-slide-up {
+  animation: slide-up-fade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
