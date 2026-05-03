@@ -14,10 +14,12 @@ export default async function CategoryDetailPage({
 }) {
   const { id: slugOrId } = await params;
 
-  // Accept both slug (new) and UUID (old links/bookmarks)
-  const [category] = await sql`
-    SELECT * FROM categories WHERE slug = ${slugOrId} OR id = ${slugOrId} LIMIT 1
-  `;
+  // Accept both slug (new) and UUID (old bookmarks). Postgres won't cast a
+  // slug string to uuid, so we branch in JS rather than using OR in SQL.
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(slugOrId);
+  const [category] = isUuid
+    ? await sql`SELECT * FROM categories WHERE id = ${slugOrId} LIMIT 1`
+    : await sql`SELECT * FROM categories WHERE slug = ${slugOrId} LIMIT 1`;
   if (!category) redirect("/categories");
 
   const categoryId = category.id as string;
