@@ -63,7 +63,7 @@ export function TransactionsTop({
 
       {/* ── Collapsible form ── */}
       {open && (
-        <div className="bg-surface border-2 border-ink rounded-md shadow-[2px_2px_0_rgba(31,31,31,0.09)] overflow-hidden">
+        <div className="bg-surface border-2 border-ink rounded-md shadow-[2px_2px_0_rgba(31,31,31,0.09)] overflow-hidden animate-slide-up">
           <div className="flex items-center px-4 py-2 border-b-2 border-ink/10 bg-ink/[0.02]">
             <span className="font-mono text-xs text-ink-soft">new transaction</span>
           </div>
