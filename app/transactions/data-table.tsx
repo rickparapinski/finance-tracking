@@ -13,6 +13,7 @@ import {
 } from "@tanstack/react-table";
 import { useMemo, useState } from "react";
 import { useCountUp } from "@/hooks/use-count-up";
+import { AnimateIn } from "@/components/ui/animate-in";
 import { Transaction } from "@/lib/adapters/types";
 import { EditModal } from "./edit-modal";
 import {
@@ -212,7 +213,8 @@ export function DataTable({
       />
 
       {/* ── Card 1+2 merged: search row + filter tab row ── */}
-      <div className={`${card} animate-slide-up`}>
+      <AnimateIn>
+      <div className={card}>
         {/* Search row */}
         <div className="px-4 py-3 flex items-center gap-3 border-b border-ink/10">
           <input
@@ -273,6 +275,7 @@ export function DataTable({
           )}
         </div>
       </div>
+      </AnimateIn>
 
       {/* ── Bulk ops panel (only when bulk mode + rows selected) ── */}
       {bulkMode && selectedCount > 0 && (
@@ -367,7 +370,8 @@ export function DataTable({
       )}
 
       {/* ── Card 3: table + footer summary + pagination — fills remaining viewport ── */}
-      <div className={`${card} overflow-hidden flex flex-col min-h-[calc(100vh-260px)] animate-slide-up`} style={{ animationDelay: "90ms" }}>
+      <AnimateIn delay={90}>
+      <div className={`${card} overflow-hidden flex flex-col min-h-[calc(100vh-260px)]`}>
         <table className="w-full text-sm flex-1">
           <thead className="bg-ink/[0.03] border-b border-ink/10">
             {table.getHeaderGroups().map((hg) => (
@@ -469,6 +473,7 @@ export function DataTable({
           </div>
         </div>
       </div>
+      </AnimateIn>
     </div>
   );
 }

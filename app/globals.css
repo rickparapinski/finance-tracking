@@ -145,3 +145,15 @@ body {
 .animate-slide-up {
   animation: slide-up-fade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+/**
+ * reveal-down — for panels that open *below* a trigger (e.g. Quick Add).
+ * Starts slightly above + invisible, drops to resting position.
+ * transform-origin: top keeps the scale anchor at the top edge.
+ */
+@keyframes reveal-down {
+  from { opacity: 0; transform: translateY(-8px) scaleY(0.96); transform-origin: top center; }
+  to   { opacity: 1; transform: translateY(0)   scaleY(1);    transform-origin: top center; }
+}
+.animate-reveal-down {
+  animation: reveal-down 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}

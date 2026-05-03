@@ -8,6 +8,7 @@ import { Segs } from "@/components/ui/segs";
 import { PixelBtn } from "@/components/ui/pixel-btn";
 import { useHideBalances } from "@/contexts/hide-balances";
 import { useCountUp } from "@/hooks/use-count-up";
+import { AnimateIn } from "@/components/ui/animate-in";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -440,18 +441,18 @@ export function OverviewClient({
       </div>
 
       {/* ── TODAY hero — first card in ── */}
-      <div className="animate-slide-up">
+      <AnimateIn>
         <TodayHero
           dailyAllowance={dailyAllowance}
           spentToday={spentToday}
           hidden={hidden}
         />
-      </div>
+      </AnimateIn>
 
       {/* ── Streak strip ── */}
-      <div className="animate-slide-up" style={{ animationDelay: "80ms" }}>
+      <AnimateIn delay={80}>
         <StreakStrip daysSinceLastLog={daysSinceLastLog} loggedDays={loggedDays} />
-      </div>
+      </AnimateIn>
 
       {/* ── Main grid ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -459,7 +460,7 @@ export function OverviewClient({
         {/* ── Left col ── */}
         <div className="lg:col-span-2 flex flex-col gap-3">
           {/* Recent transactions */}
-          <div className="animate-slide-up" style={{ animationDelay: "160ms" }}>
+          <AnimateIn delay={160}>
             <Panel>
               <div className="flex items-center justify-between mb-2">
                 <h2 className="font-pixel text-ink text-xs tracking-wide">recent transactions</h2>
@@ -492,37 +493,37 @@ export function OverviewClient({
                 ))
               )}
             </Panel>
-          </div>
+          </AnimateIn>
 
           {/* Assets vs debt */}
-          <div className="animate-slide-up" style={{ animationDelay: "260ms" }}>
+          <AnimateIn delay={260}>
             <AssetDebtCard
               totalAssets={totalAssets}
               totalLiabilities={totalLiabilities}
               hidden={hidden}
             />
-          </div>
+          </AnimateIn>
         </div>
 
         {/* ── Right col ── */}
         <div className="lg:col-span-3 flex flex-col gap-3">
           {/* Debt slab */}
-          <div className="animate-slide-up" style={{ animationDelay: "210ms" }}>
+          <AnimateIn delay={210}>
             <DebtCard
               totalLiabilities={totalLiabilities}
               debtAccounts={debtAccounts}
               hidden={hidden}
             />
-          </div>
+          </AnimateIn>
 
           {/* Spending & budget */}
-          <div className="animate-slide-up" style={{ animationDelay: "310ms" }}>
+          <AnimateIn delay={310}>
             <SpendingCard
               spendingRows={spendingRows}
               maxSpent={maxSpent}
               hidden={hidden}
             />
-          </div>
+          </AnimateIn>
         </div>
       </div>
     </div>
