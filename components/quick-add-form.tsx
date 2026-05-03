@@ -18,6 +18,12 @@ interface QuickAddFormProps {
   onSuccess?: () => Promise<void> | void;
 }
 
+// ── Design-system tokens ───────────────────────────────────────────────────────
+const labelCls = "block text-xs font-mono text-ink-soft mb-1";
+const inputCls =
+  "h-9 w-full rounded-md border-2 border-ink bg-white px-3 text-sm text-ink " +
+  "placeholder:text-ink/30 focus:outline-none focus:border-ink/70 transition-none";
+
 export function QuickAddForm({ accounts, categories, defaultAccountId, onSuccess }: QuickAddFormProps) {
   const [date, setDate] = useState<Date>(new Date());
   const [calOpen, setCalOpen] = useState(false);
@@ -100,29 +106,23 @@ export function QuickAddForm({ accounts, categories, defaultAccountId, onSuccess
   const fmtEur = (n: number) =>
     new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" }).format(n);
 
-  const fmtCur = (n: number) =>
-    new Intl.NumberFormat("de-DE", { style: "currency", currency }).format(n);
-
-  const labelCls = "block text-[10px] text-zinc-400 uppercase font-bold mb-1";
-  const inputCls =
-    "h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200";
-
   return (
-    <div className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-softer)]">
-      <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Add</h3>
+    <>
+      <h3 className="font-mono text-sm text-ink font-medium mb-4">quick add</h3>
+
       <form ref={formRef} onSubmit={handleSubmit} className="flex flex-wrap gap-3 items-end">
         <input type="hidden" name="account_id" value={accountId} />
 
         {/* Date picker */}
         <div>
-          <label className={labelCls}>Date</label>
+          <label className={labelCls}>date</label>
           <Popover open={calOpen} onOpenChange={setCalOpen}>
             <PopoverTrigger asChild>
               <button
                 type="button"
-                className="h-10 min-w-[140px] rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 flex items-center gap-2 hover:bg-slate-50 transition focus:outline-none focus:ring-2 focus:ring-slate-200"
+                className="h-9 min-w-[140px] rounded-md border-2 border-ink bg-white px-3 text-sm text-ink flex items-center gap-2 hover:bg-cream-soft focus:outline-none transition-none"
               >
-                <CalendarIcon size={14} className="text-slate-400 shrink-0" />
+                <CalendarIcon size={13} className="text-ink/40 shrink-0" />
                 {format(date, "MMM d, yyyy")}
               </button>
             </PopoverTrigger>
@@ -139,18 +139,18 @@ export function QuickAddForm({ accounts, categories, defaultAccountId, onSuccess
 
         {/* Description */}
         <div className="flex-1 min-w-[180px]">
-          <label className={labelCls}>Description</label>
+          <label className={labelCls}>description</label>
           <input
             name="description"
             required
-            placeholder="e.g. Groceries"
+            placeholder="e.g. groceries"
             className={inputCls}
           />
         </div>
 
         {/* Category */}
         <div className="w-44">
-          <label className={labelCls}>Category</label>
+          <label className={labelCls}>category</label>
           <select
             name="category"
             value={category}
@@ -169,7 +169,7 @@ export function QuickAddForm({ accounts, categories, defaultAccountId, onSuccess
         {/* Account selector — hidden when defaultAccountId is set */}
         {!defaultAccountId && (
           <div className="w-44">
-            <label className={labelCls}>Account</label>
+            <label className={labelCls}>account</label>
             <select
               name="account_id_display"
               value={accountId}
@@ -186,9 +186,9 @@ export function QuickAddForm({ accounts, categories, defaultAccountId, onSuccess
         {/* Amount + EUR preview */}
         <div>
           <label className={labelCls}>
-            Amount
+            amount
             {currency !== "EUR" && (
-              <span className="ml-1 normal-case text-indigo-500 font-semibold">({currency})</span>
+              <span className="ml-1 font-mono text-ink/50">({currency})</span>
             )}
           </label>
           <div className="flex items-center gap-2">
@@ -200,10 +200,10 @@ export function QuickAddForm({ accounts, categories, defaultAccountId, onSuccess
               placeholder="-0.00"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="h-10 w-32 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
+              className="h-9 w-32 rounded-md border-2 border-ink bg-white px-3 text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:border-ink/70 transition-none"
             />
             {currency !== "EUR" && eurPreview != null && (
-              <span className="text-xs text-slate-500 whitespace-nowrap">
+              <span className="font-mono text-xs text-ink/40 whitespace-nowrap">
                 ≈ {fmtEur(eurPreview)}
               </span>
             )}
@@ -212,43 +212,44 @@ export function QuickAddForm({ accounts, categories, defaultAccountId, onSuccess
 
         {/* Installment toggle + fields */}
         <div className="flex items-end gap-2">
-          <div className="flex flex-col justify-end h-10 pb-2">
-            <label className="flex items-center gap-1.5 cursor-pointer select-none text-xs text-slate-500 font-medium">
+          <div className="flex flex-col justify-end h-9 pb-1">
+            <label className="flex items-center gap-1.5 cursor-pointer select-none font-mono text-xs text-ink-soft">
               <input
                 type="checkbox"
                 checked={isInstallment}
                 onChange={(e) => setIsInstallment(e.target.checked)}
-                className="accent-indigo-600 h-3.5 w-3.5"
+                className="accent-ink h-3.5 w-3.5"
               />
-              Installment
+              installment
             </label>
           </div>
           {isInstallment && (
             <>
               <div>
-                <label className={labelCls}>Current #</label>
+                <label className={labelCls}>current #</label>
                 <input
                   type="number"
                   min="1"
                   value={installmentIndex}
                   onChange={(e) => setInstallmentIndex(e.target.value)}
-                  className="h-10 w-16 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 text-center"
+                  className="h-9 w-16 rounded-md border-2 border-ink bg-white px-3 text-sm text-ink focus:outline-none focus:border-ink/70 transition-none text-center"
                 />
               </div>
-              <span className="mb-2 text-slate-400 text-sm">/</span>
+              <span className="mb-1 font-mono text-sm text-ink/30">/</span>
               <div>
-                <label className={labelCls}>Total</label>
+                <label className={labelCls}>total</label>
                 <input
                   type="number"
                   min="1"
                   value={installmentTotal}
                   onChange={(e) => setInstallmentTotal(e.target.value)}
-                  className="h-10 w-16 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 text-center"
+                  className="h-9 w-16 rounded-md border-2 border-ink bg-white px-3 text-sm text-ink focus:outline-none focus:border-ink/70 transition-none text-center"
                 />
               </div>
               {parseInt(installmentIndex) < parseInt(installmentTotal) && (
-                <p className="mb-2 text-[10px] text-indigo-500 self-end">
-                  {parseInt(installmentTotal) - parseInt(installmentIndex)} future installment{parseInt(installmentTotal) - parseInt(installmentIndex) > 1 ? "s" : ""} will be forecasted
+                <p className="mb-1 font-mono text-[10px] text-ink/40 self-end">
+                  {parseInt(installmentTotal) - parseInt(installmentIndex)} future{" "}
+                  installment{parseInt(installmentTotal) - parseInt(installmentIndex) > 1 ? "s" : ""} forecasted
                 </p>
               )}
             </>
@@ -258,13 +259,13 @@ export function QuickAddForm({ accounts, categories, defaultAccountId, onSuccess
         {/* Transfer counterpart */}
         {isTransfer && (
           <div className="w-44">
-            <label className={labelCls + " text-amber-600"}>Transfer to</label>
+            <label className={labelCls + " text-lime"}>transfer to</label>
             <select
               ref={counterpartRef}
               name="counterpart_account_id"
               value={counterpartId}
               onChange={(e) => setCounterpartId(e.target.value)}
-              className={`${inputCls} ring-2 ring-amber-400 border-amber-400`}
+              className="h-9 w-full rounded-md border-2 border-lime bg-white px-3 text-sm text-ink focus:outline-none transition-none"
             >
               <option value="">— select account —</option>
               {otherAccounts.map((a) => (
@@ -274,14 +275,15 @@ export function QuickAddForm({ accounts, categories, defaultAccountId, onSuccess
           </div>
         )}
 
+        {/* Add */}
         <button
           type="submit"
           disabled={isPending}
-          className="h-10 rounded-xl bg-emerald-500 px-5 text-sm font-medium text-white shadow-[var(--shadow-softer)] hover:opacity-90 transition disabled:opacity-60"
+          className="h-9 rounded-md bg-[#C5F03A] border-2 border-ink px-5 font-mono text-sm font-medium text-ink hover:opacity-90 disabled:opacity-50 transition-none"
         >
-          {isPending ? "Adding…" : "Add"}
+          {isPending ? "adding…" : "add"}
         </button>
       </form>
-    </div>
+    </>
   );
 }

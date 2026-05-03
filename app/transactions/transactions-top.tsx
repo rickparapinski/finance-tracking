@@ -48,9 +48,13 @@ export function TransactionsTop({
         {/* Button self-center so it sits flush with the h1 midpoint, not the subtitle */}
         <button
           onClick={() => setOpen((v) => !v)}
-          className={`self-center flex items-center gap-1.5 h-8 px-3 border-2 border-ink font-pixel text-[11px] rounded-md shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none shrink-0 ${
-            open ? "bg-ink text-cream-soft" : "bg-lime text-ink"
-          }`}
+          className={
+            open
+              // Cancel state: secondary button — flat, surface bg
+              ? "self-center flex items-center gap-1.5 h-8 px-3 bg-surface border-2 border-ink text-ink font-mono text-[11px] rounded-md hover:bg-cream-soft transition-none shrink-0"
+              // Open state: primary PixelBtn lime
+              : "self-center flex items-center gap-1.5 h-8 px-3 bg-lime border-2 border-ink text-ink font-pixel text-[11px] rounded-md shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none shrink-0"
+          }
         >
           {open ? <X size={11} className="shrink-0" /> : <Plus size={11} className="shrink-0" />}
           {open ? "cancel" : "log a transaction"}
@@ -61,7 +65,7 @@ export function TransactionsTop({
       {open && (
         <div className="bg-surface border-2 border-ink rounded-md shadow-[2px_2px_0_rgba(31,31,31,0.09)] overflow-hidden">
           <div className="flex items-center px-4 py-2 border-b-2 border-ink/10 bg-ink/[0.02]">
-            <span className="font-pixel text-[10px] text-ink/40">new transaction</span>
+            <span className="font-mono text-xs text-ink-soft">new transaction</span>
           </div>
           <div className="p-4">
             <QuickAddForm
