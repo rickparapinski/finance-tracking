@@ -158,3 +158,11 @@ body {
   transform-origin: top center;
   animation: reveal-down 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+@keyframes reveal-up {
+  from { opacity: 1; transform: translateY(0)   scaleY(1); }
+  to   { opacity: 0; transform: translateY(-8px) scaleY(0.96); }
+}
+.animate-reveal-up {
+  transform-origin: top center;
+  animation: reveal-up 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+}
