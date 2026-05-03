@@ -26,8 +26,8 @@ export function CycleNavigator({
   const goNext = () => { if (idx > 0) onChange(periods[idx - 1]); };
 
   const btnCls =
-    "grid size-8 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500 " +
-    "hover:bg-slate-50 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition";
+    "grid size-8 place-items-center rounded-md border-2 border-ink bg-surface text-ink " +
+    "hover:bg-cream-soft disabled:opacity-30 disabled:cursor-not-allowed transition-none";
 
   return (
     <div className={`flex items-center gap-2 ${isPending ? "opacity-60 pointer-events-none" : ""}`}>
@@ -41,11 +41,11 @@ export function CycleNavigator({
       </button>
 
       <div className="text-center min-w-[160px]">
-        <p className="text-xs font-semibold text-slate-800 leading-tight">
+        <p className="font-mono text-xs text-ink font-medium leading-tight">
           {fmtPeriodLabel(selected.start_date, selected.end_date)}
         </p>
         {isCurrent && (
-          <span className="text-[10px] font-medium text-indigo-500 uppercase tracking-wide">
+          <span className="font-mono text-[10px] text-ink-soft">
             current
           </span>
         )}

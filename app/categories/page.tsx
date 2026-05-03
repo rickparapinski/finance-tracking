@@ -26,7 +26,7 @@ export default async function CategoriesPage() {
   );
 
   return (
-    <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-8">
+    <main className="min-h-screen p-4 md:p-6 max-w-6xl mx-auto">
       <CategoriesClientPage
         categories={categories as any[]}
         spendingMap={spendingMap}

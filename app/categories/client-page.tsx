@@ -4,8 +4,9 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { CategoryModal } from "./category-modal";
 import { getSpendingForCycle } from "./actions";
-import { categoryColor } from "@/lib/category-color";
 import { CycleNavigator } from "@/components/cycle-navigator";
+import { CategoryIcon } from "@/components/icons/CategoryIcon";
+import { Segs } from "@/components/ui/segs";
 import { type Period } from "@/lib/periods";
 
 type Category = {
@@ -50,11 +51,11 @@ export function CategoriesClientPage({
       maximumFractionDigits: 2,
     }).format(n);
 
-  const income = categories.filter((c) => c.type === "income");
+  const income  = categories.filter((c) => c.type === "income");
   const expense = categories.filter((c) => c.type === "expense");
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <CategoryModal
         isOpen={isModalOpen}
         onClose={() => {
@@ -64,16 +65,15 @@ export function CategoriesClientPage({
         categoryToEdit={null}
       />
 
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Categories
-          </h1>
-          <p className="text-sm text-slate-500">
-            Manage spending categories and monthly budgets.
+          <h1 className="font-pixel text-xl text-ink leading-none">categories</h1>
+          <p className="font-mono text-xs text-ink-soft mt-1">
+            budgets &amp; spending by cycle
           </p>
         </div>
+
         <div className="flex items-center gap-3">
           <CycleNavigator
             periods={periods}
@@ -84,20 +84,20 @@ export function CategoriesClientPage({
           />
           <button
             onClick={() => setIsModalOpen(true)}
-            className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition"
+            className="h-8 px-3 flex items-center gap-1 bg-lime border-2 border-ink text-ink font-pixel text-[11px] rounded-md shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
           >
-            + New
+            + new
           </button>
         </div>
       </div>
 
-      {/* Income section */}
+      {/* ── Income section ── */}
       {income.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Income
+          <h2 className="font-mono text-[10px] uppercase tracking-widest text-ink-soft">
+            income
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {income.map((c) => (
               <CategoryCard
                 key={c.id}
@@ -110,13 +110,13 @@ export function CategoriesClientPage({
         </section>
       )}
 
-      {/* Expense section */}
+      {/* ── Expense section ── */}
       {expense.length > 0 && (
         <section className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Expenses
+          <h2 className="font-mono text-[10px] uppercase tracking-widest text-ink-soft">
+            expenses
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
             {expense.map((c) => (
               <CategoryCard
                 key={c.id}
@@ -130,8 +130,8 @@ export function CategoriesClientPage({
       )}
 
       {categories.length === 0 && (
-        <div className="rounded-xl bg-white p-12 text-center text-slate-500 text-sm shadow-[var(--shadow-softer)]">
-          No categories yet. Create one to get started.
+        <div className="rounded-md border-2 border-ink/10 bg-surface p-12 text-center font-mono text-xs text-ink-soft">
+          no categories yet. create one to get started.
         </div>
       )}
     </div>
@@ -147,58 +147,60 @@ function CategoryCard({
   spent: number;
   fmt: (n: number) => string;
 }) {
-  const color = categoryColor(c.name, c.color);
-  const budget = Number(c.monthly_budget ?? 0);
-  const pct = budget > 0 ? Math.min(100, Math.round((spent / budget) * 100)) : 0;
-  const over = budget > 0 && spent > budget;
+  const budget  = Number(c.monthly_budget ?? 0);
+  const pct     = budget > 0 ? Math.min(1, spent / budget) : 0;
+  const filled  = Math.round(pct * 8);           // 0–8 segments
+  const over    = budget > 0 && spent > budget;
 
   return (
     <a
       href={`/categories/${c.id}`}
-      className="block rounded-xl bg-white shadow-[var(--shadow-softer)] hover:shadow-md transition-shadow overflow-hidden group"
+      className="block rounded-md border-2 border-ink bg-surface overflow-hidden hover:shadow-[2px_2px_0_rgba(31,31,31,0.12)] transition-none group"
     >
-      <div className="h-1" style={{ backgroundColor: color }} />
-      <div className="p-5 space-y-3">
-        <div className="flex items-start justify-between gap-2">
+      {/* ── Over-budget dark slab ── */}
+      {over && (
+        <div className="bg-ink px-3 py-1.5 flex items-center justify-between gap-2">
+          <span className="font-mono text-[10px] text-cream-soft uppercase tracking-wider">
+            over budget
+          </span>
+          <span className="font-mono text-[10px] text-cream-soft/70">
+            +{fmt(spent - budget)}
+          </span>
+        </div>
+      )}
+
+      <div className="p-4 space-y-3">
+        {/* ── Name row ── */}
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <div
-              className="w-2.5 h-2.5 rounded-full shrink-0"
-              style={{ backgroundColor: color }}
+            <CategoryIcon
+              category={c.name}
+              className="w-4 h-4 shrink-0 text-ink/60"
             />
-            <span className="text-sm font-semibold text-slate-900 truncate group-hover:text-slate-600 transition-colors">
+            <span className="font-mono text-sm text-ink truncate">
               {c.name}
             </span>
             {!c.is_active && (
-              <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
-                Inactive
+              <span className="font-mono text-[10px] text-ink-soft bg-ink/5 border border-ink/10 px-1.5 py-0.5 rounded shrink-0">
+                inactive
               </span>
             )}
           </div>
-          <span className="text-sm font-semibold text-slate-900 tabular-nums shrink-0">
+          <span className="font-mono text-sm text-ink tabular-nums shrink-0">
             {fmt(spent)}
           </span>
         </div>
 
+        {/* ── Budget bar ── */}
         {budget > 0 ? (
           <div className="space-y-1.5">
-            <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all"
-                style={{
-                  width: `${pct}%`,
-                  backgroundColor: over ? "#ef4444" : color,
-                }}
-              />
-            </div>
-            <p className="text-[11px] text-slate-400">
-              {pct}% of {fmt(budget)} budget
-              {over && (
-                <span className="text-rose-500 ml-1">· over budget</span>
-              )}
+            <Segs filled={filled} dark={false} />
+            <p className="font-mono text-[10px] text-ink-soft">
+              {Math.round(pct * 100)}% of {fmt(budget)}
             </p>
           </div>
         ) : (
-          <p className="text-[11px] text-slate-400">No budget set</p>
+          <p className="font-mono text-[10px] text-ink-soft">no budget set</p>
         )}
       </div>
     </a>
