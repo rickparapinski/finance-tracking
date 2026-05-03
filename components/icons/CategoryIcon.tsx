@@ -78,15 +78,18 @@ interface CategoryIconProps {
   className?: string;
 }
 
-export function CategoryIcon({ category, className = "w-5 h-5" }: CategoryIconProps) {
+export function CategoryIcon({ category, className = "w-6 h-6" }: CategoryIconProps) {
   const key = getIconKey(category);
 
   if (!key) {
-    // Fallback: solid square placeholder
+    // Fallback: 2×2 pixel dot-grid, same visual weight as the real icons
     return (
-      <span className={`inline-flex items-center justify-center font-mono text-[10px] leading-none ${className}`}>
-        ■
-      </span>
+      <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
+        <rect x="8"  y="8"  width="6" height="6" fill="currentColor"/>
+        <rect x="18" y="8"  width="6" height="6" fill="currentColor"/>
+        <rect x="8"  y="18" width="6" height="6" fill="currentColor"/>
+        <rect x="18" y="18" width="6" height="6" fill="currentColor"/>
+      </svg>
     );
   }
 

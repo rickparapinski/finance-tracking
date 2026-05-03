@@ -175,7 +175,7 @@ function CategoryCard({
           <div className="flex items-center gap-2 min-w-0">
             <CategoryIcon
               category={c.name}
-              className="w-4 h-4 shrink-0 text-ink/60"
+              className={`w-6 h-6 shrink-0 ${over ? "text-[#F4EFE3]" : "text-[#1F1F1F]"}`}
             />
             <span className="font-mono text-sm text-ink truncate">
               {c.name}
