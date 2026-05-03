@@ -134,7 +134,7 @@ export const columns: ColumnDef<Transaction>[] = [
       const truncDetail = detail && detail.length > 40 ? detail.slice(0, 40) + "…" : detail;
       return (
         <div className="min-w-[160px] flex items-baseline gap-1 flex-wrap">
-          <span className="font-sans font-medium text-[13px] text-ink">{merchant}</span>
+          <span className="font-sans font-medium text-sm text-ink">{merchant}</span>
           {truncDetail && (
             <>
               <span className="text-ink/25 text-[12px]">·</span>
@@ -194,7 +194,7 @@ export const columns: ColumnDef<Transaction>[] = [
       return (
         <div className="text-right">
           <span
-            className={`tabular-nums font-mono text-[13px] ${isBig ? "font-bold" : "font-medium"} ${
+            className={`tabular-nums font-mono text-sm ${isBig ? "font-bold" : "font-medium"} ${
               isPositive ? "text-lime" : "text-ink"
             }`}
           >
