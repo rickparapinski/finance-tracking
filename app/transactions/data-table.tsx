@@ -205,61 +205,57 @@ export function DataTable({
         allTags={allTags}
       />
 
-      {/* ── Card 1: search + date range + bulk toggle ── */}
-      <div className={`${card} px-4 py-3 flex items-center gap-3`}>
-        <input
-          placeholder="search transactions…"
-          value={globalFilter ?? ""}
-          onChange={(e) => setGlobalFilter(e.target.value)}
-          className="h-8 min-w-[180px] flex-1 border-2 border-ink/25 rounded-md bg-cream px-3 font-sans text-[12px] text-ink placeholder:text-ink/30 focus:outline-none focus:border-ink transition-none"
-        />
-        <DateRangePicker
-          from={dateFrom}
-          to={dateTo}
-          onChange={(from, to) => {
-            setDateFrom(from);
-            setDateTo(to);
-            setActivePreset("");
-          }}
-        />
-        {/* Bulk edit toggle — secondary style when off, ink-inverted when on */}
-        <button
-          onClick={toggleBulkMode}
-          title="Toggle bulk-edit mode (select rows to batch-assign categories / tags)"
-          className={bulkMode
-            ? "h-8 bg-ink border-2 border-ink text-cream-soft font-mono text-[11px] rounded-md px-3 transition-none shrink-0"
-            : `${btnSec} shrink-0`
-          }
-        >
-          bulk edit
-        </button>
-      </div>
+      {/* ── Card 1+2 merged: search row + filter tab row ── */}
+      <div className={card}>
+        {/* Search row */}
+        <div className="px-4 py-3 flex items-center gap-3 border-b border-ink/10">
+          <input
+            placeholder="search transactions…"
+            value={globalFilter ?? ""}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            className="h-8 min-w-[180px] flex-1 border-2 border-ink/25 rounded-md bg-cream px-3 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:border-ink transition-none"
+          />
+          <DateRangePicker
+            from={dateFrom}
+            to={dateTo}
+            onChange={(from, to) => {
+              setDateFrom(from);
+              setDateTo(to);
+              setActivePreset("");
+            }}
+          />
+          <button
+            onClick={toggleBulkMode}
+            title="Toggle bulk-edit mode (select rows to batch-assign categories / tags)"
+            className={bulkMode
+              ? "h-8 bg-ink border-2 border-ink text-cream-soft font-mono text-sm rounded-md px-3 transition-none shrink-0"
+              : `${btnSec} shrink-0`
+            }
+          >
+            bulk edit
+          </button>
+        </div>
 
-      {/* ── Card 2: preset chips + count + uncategorized ── */}
-      <div className={`${card} px-4 py-2`}>
-        <div className="flex items-center flex-wrap gap-y-1">
-          {/* Preset pills — lime bottom-border when active */}
+        {/* Filter tab row — hairline separator from search */}
+        <div className="px-4 py-2 flex items-center flex-wrap gap-y-1">
           {PRESETS.map((p) => (
             <button
               key={p.label}
               onClick={() => applyPreset(p)}
-              className={`font-pixel text-[10px] px-2.5 py-1.5 border-b-2 transition-none ${
+              className={`font-mono text-xs px-2.5 py-1.5 border-b-2 transition-none ${
                 activePreset === p.label
                   ? "border-lime text-ink"
-                  : "border-transparent text-ink/35 hover:text-ink/65 hover:border-ink/20"
+                  : "border-transparent text-ink/40 hover:text-ink/70 hover:border-ink/20"
               }`}
             >
               {p.label}
             </button>
           ))}
-
-          {/* Count — right after last chip */}
-          <span className="font-mono text-[10px] text-ink/30 ml-3">
+          <span className="font-mono text-xs text-ink/30 ml-3">
             {table.getRowModel().rows.length} / {visibleData.length}
           </span>
-
           {uncategorizedCount > 0 && (
-            <label className="flex items-center gap-1.5 ml-3 font-sans text-[11px] text-ink/45 cursor-pointer">
+            <label className="flex items-center gap-1.5 ml-3 font-sans text-xs text-ink/45 cursor-pointer">
               <input
                 type="checkbox"
                 checked={showOnlyUncategorized}
