@@ -2,10 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { sql } from "@/lib/db";
-
-export function toSlug(name: string): string {
-  return name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-}
+import { toSlug } from "@/lib/slug";
 
 async function syncBudgetRule(
   categoryId: string,
