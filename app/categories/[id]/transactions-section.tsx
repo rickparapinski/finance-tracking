@@ -33,20 +33,20 @@ export function TransactionsSection({
       const data = await getCategoryTransactions(
         categoryName,
         period.start_date,
-        period.end_date
+        period.end_date,
       );
-      setTransactions(data as Transaction[]);
+      setTransactions(data as unknown as Transaction[]);
     });
   };
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">Transactions</h2>
-          <p className="text-xs text-slate-500">
-            {transactions.length} transaction{transactions.length !== 1 ? "s" : ""} in this period
-          </p>
+          <span className="font-mono text-xs text-ink-soft">transactions</span>
+          <span className="font-mono text-xs text-ink-soft ml-2">
+            — {transactions.length} in this period
+          </span>
         </div>
         <CycleNavigator
           periods={periods}

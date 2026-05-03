@@ -17,6 +17,8 @@ interface CategoryModalProps {
   isOpen: boolean;
   onClose: () => void;
   categoryToEdit?: Category | null;
+  /** Called when user confirms delete (only shown in edit mode) */
+  onDelete?: () => void;
 }
 
 // ── Design-system tokens ───────────────────────────────────────────────────────
@@ -29,6 +31,7 @@ export function CategoryModal({
   isOpen,
   onClose,
   categoryToEdit,
+  onDelete,
 }: CategoryModalProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [form, setForm] = useState({
@@ -166,7 +169,17 @@ export function CategoryModal({
           )}
 
           {/* actions */}
-          <div className="pt-2 flex justify-end gap-2">
+          <div className="pt-2 flex items-center gap-2">
+            {/* delete — only in edit mode, left-aligned */}
+            {categoryToEdit && onDelete && (
+              <button
+                type="button"
+                onClick={() => { onClose(); onDelete(); }}
+                className="font-mono text-xs text-ink-soft hover:text-ink underline transition-none mr-auto"
+              >
+                delete category
+              </button>
+            )}
             <button
               type="button"
               onClick={onClose}
