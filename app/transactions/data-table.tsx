@@ -364,9 +364,9 @@ export function DataTable({
         </div>
       )}
 
-      {/* ── Card 3: table + footer summary + pagination ── */}
-      <div className={`${card} overflow-hidden`}>
-        <table className="w-full text-sm">
+      {/* ── Card 3: table + footer summary + pagination — fills remaining viewport ── */}
+      <div className={`${card} overflow-hidden flex flex-col min-h-[calc(100vh-260px)]`}>
+        <table className="w-full text-sm flex-1">
           <thead className="bg-ink/[0.03] border-b border-ink/10">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
