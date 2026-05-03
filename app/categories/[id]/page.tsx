@@ -16,15 +16,20 @@ export default async function CategoryDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id: categoryId } = await params;
+  const { id: slugOrId } = await params;
 
-  const [category] = await sql`SELECT * FROM categories WHERE id = ${categoryId}`;
+  // Accept both slug (new) and UUID (old links/bookmarks)
+  const [category] = await sql`
+    SELECT * FROM categories WHERE slug = ${slugOrId} OR id = ${slugOrId} LIMIT 1
+  `;
   if (!category) redirect("/categories");
 
   const { start, end, key } = await fetchCurrentCycle();
   const startStr = start.toISOString().slice(0, 10);
   const endStr = end.toISOString().slice(0, 10);
   const periods = buildPeriodList(startStr, endStr, key);
+
+  const categoryId = category.id as string;
 
   const [rules, transactions, categoriesRows, accountsRows] = await Promise.all([
     sql`SELECT * FROM category_rules WHERE category_id = ${categoryId} ORDER BY priority ASC, pattern ASC`,

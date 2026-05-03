@@ -16,6 +16,7 @@ type Category = {
   color: string | null;
   is_active: boolean;
   monthly_budget: number | null;
+  slug: string | null;
 };
 
 export function CategoriesClientPage({
@@ -154,7 +155,7 @@ function CategoryCard({
 
   return (
     <a
-      href={`/categories/${c.id}`}
+      href={`/categories/${c.slug ?? c.id}`}
       className="block rounded-md border-2 border-ink bg-surface overflow-hidden hover:shadow-[2px_2px_0_rgba(31,31,31,0.12)] transition-none group"
     >
       {/* ── Over-budget dark slab ── */}

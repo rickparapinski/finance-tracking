@@ -3,6 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { sql } from "@/lib/db";
 
+async function revalidateCategory(categoryId: string) {
+  const [cat] = await sql`SELECT slug FROM categories WHERE id = ${categoryId}`;
+  revalidatePath(`/categories/${categoryId}`);
+  if (cat?.slug) revalidatePath(`/categories/${cat.slug}`);
+  revalidatePath("/transactions");
+}
+
 export async function createRule(formData: FormData) {
   const categoryId = String(
     formData.get("category_id") ?? formData.get("categoryId") ?? "",
@@ -22,7 +29,6 @@ export async function createRule(formData: FormData) {
 
   if (applyExisting) {
     const [cat] = await sql`SELECT name FROM categories WHERE id = ${categoryId}`;
-
     if (cat?.name) {
       await sql`
         UPDATE transactions
@@ -32,8 +38,7 @@ export async function createRule(formData: FormData) {
     }
   }
 
-  revalidatePath(`/categories/${categoryId}`);
-  revalidatePath("/transactions");
+  await revalidateCategory(categoryId);
 }
 
 export async function updateRule(formData: FormData) {
@@ -56,7 +61,7 @@ export async function updateRule(formData: FormData) {
     WHERE id = ${id}
   `;
 
-  revalidatePath(`/categories/${categoryId}`);
+  await revalidateCategory(categoryId);
 }
 
 export async function countMatchingUncategorized(pattern: string): Promise<number> {
@@ -78,5 +83,5 @@ export async function deleteRule(formData: FormData) {
 
   await sql`DELETE FROM category_rules WHERE id = ${id}`;
 
-  revalidatePath(`/categories/${categoryId}`);
+  await revalidateCategory(categoryId);
 }

@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { sql } from "@/lib/db";
 
+export function toSlug(name: string): string {
+  return name.toLowerCase().trim().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+}
+
 async function syncBudgetRule(
   categoryId: string,
   name: string,
@@ -88,12 +92,13 @@ export async function createCategory(formData: FormData) {
   const type = String(formData.get("type") || "expense");
   const color = String(formData.get("color") || "").trim() || null;
   const budget = parseFloat(String(formData.get("monthly_budget") || "0"));
+  const slug = toSlug(name);
 
   if (!name) throw new Error("Category name is required");
 
   const [data] = await sql`
-    INSERT INTO categories (name, type, color, monthly_budget)
-    VALUES (${name}, ${type}, ${color}, ${budget})
+    INSERT INTO categories (name, type, color, monthly_budget, slug)
+    VALUES (${name}, ${type}, ${color}, ${budget}, ${slug})
     RETURNING id
   `;
 
@@ -109,18 +114,22 @@ export async function updateCategory(formData: FormData) {
   const color = String(formData.get("color") || "").trim() || null;
   const is_active = formData.get("is_active") === "on";
   const budget = parseFloat(String(formData.get("monthly_budget") || "0"));
+  const slug = toSlug(name);
 
   if (!id) throw new Error("Missing category id");
 
-  await sql`
+  const [updated] = await sql`
     UPDATE categories
-    SET name = ${name}, type = ${type}, color = ${color}, is_active = ${is_active}, monthly_budget = ${budget}
+    SET name = ${name}, type = ${type}, color = ${color}, is_active = ${is_active},
+        monthly_budget = ${budget}, slug = ${slug}
     WHERE id = ${id}
+    RETURNING slug
   `;
 
   await syncBudgetRule(id, name, type, is_active ? budget : 0);
 
   revalidatePath("/categories");
+  if (updated?.slug) revalidatePath(`/categories/${updated.slug}`);
 }
 
 export async function deleteCategory(id: string) {
