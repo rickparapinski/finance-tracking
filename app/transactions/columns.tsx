@@ -117,10 +117,9 @@ export const columns: ColumnDef<Transaction>[] = [
     cell: ({ row }) => {
       const { day, mon } = fmtDate(row.original.date);
       return (
-        // Compact inline: "30 apr" — saves row height vs stacked layout
-        <span className="font-mono text-[12px] text-ink whitespace-nowrap">
-          {day}{" "}
-          <span className="text-ink/40 text-[10px]">{mon}</span>
+        // Inline "28 may" — font-mono text-sm, one line
+        <span className="font-mono text-sm text-ink whitespace-nowrap">
+          {day} <span className="text-ink/45">{mon}</span>
         </span>
       );
     },

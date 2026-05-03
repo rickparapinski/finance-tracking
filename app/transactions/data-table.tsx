@@ -397,7 +397,7 @@ export function DataTable({
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className={`px-3 py-1.5 ${cell.column.id === "amount" ? "text-right" : ""}`}
+                      className={`px-3 py-2 ${cell.column.id === "amount" ? "text-right" : ""}`}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
