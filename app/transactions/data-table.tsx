@@ -364,7 +364,7 @@ export function DataTable({
         </div>
       )}
 
-      {/* ── Card 3: table + footer summary ── */}
+      {/* ── Card 3: table + footer summary + pagination ── */}
       <div className={`${card} overflow-hidden`}>
         <table className="w-full text-sm">
           <thead className="bg-ink/[0.03] border-b border-ink/10">
@@ -443,28 +443,28 @@ export function DataTable({
             </tfoot>
           )}
         </table>
-      </div>
 
-      {/* ── Pagination — bare on cream, no card wrapper ── */}
-      <div className="flex items-center justify-between px-1 py-1">
-        <span className="font-pixel text-[10px] text-ink/35">
-          page {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-            className={btnSec}
-          >
-            ← prev
-          </button>
-          <button
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-            className={btnSec}
-          >
-            next →
-          </button>
+        {/* ── Pagination — inside the card, below tfoot ── */}
+        <div className="border-t border-ink/10 px-4 py-2.5 flex items-center justify-between bg-ink/[0.02]">
+          <span className="font-mono text-xs text-ink/40">
+            page {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+              className={btnSec}
+            >
+              ← prev
+            </button>
+            <button
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+              className={btnSec}
+            >
+              next →
+            </button>
+          </div>
         </div>
       </div>
     </div>
