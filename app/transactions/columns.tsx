@@ -117,11 +117,11 @@ export const columns: ColumnDef<Transaction>[] = [
     cell: ({ row }) => {
       const { day, mon } = fmtDate(row.original.date);
       return (
-        // Hierarchy: large pixel day number, tiny mono month below
-        <div className="text-center w-9 shrink-0">
-          <div className="font-pixel text-[17px] text-ink leading-none">{day}</div>
-          <div className="font-mono text-[9px] text-ink/40 tracking-widest mt-0.5">{mon}</div>
-        </div>
+        // Compact inline: "30 apr" — saves row height vs stacked layout
+        <span className="font-mono text-[12px] text-ink whitespace-nowrap">
+          {day}{" "}
+          <span className="text-ink/40 text-[10px]">{mon}</span>
+        </span>
       );
     },
   },
@@ -131,13 +131,20 @@ export const columns: ColumnDef<Transaction>[] = [
     cell: ({ row }) => {
       const { installment_index: idx, installment_total: total } = row.original as any;
       const { merchant, detail } = splitDescription(row.original.description ?? "");
+      // Truncate long detail at 40 chars; full text visible on hover via title
+      const truncDetail = detail && detail.length > 40 ? detail.slice(0, 40) + "…" : detail;
       return (
-        <div className="min-w-[180px] flex items-baseline gap-1 flex-wrap">
-          <span className="font-sans text-[13px] text-ink/80">{merchant}</span>
-          {detail && (
+        <div className="min-w-[160px] flex items-baseline gap-1 flex-wrap">
+          <span className="font-sans font-medium text-[13px] text-ink">{merchant}</span>
+          {truncDetail && (
             <>
-              <span className="font-sans text-[13px] text-ink/25">·</span>
-              <span className="font-sans text-[12px] text-ink/45">{detail}</span>
+              <span className="text-ink/25 text-[12px]">·</span>
+              <span
+                className="font-sans text-[12px] text-ink/50"
+                title={detail ?? ""}
+              >
+                {truncDetail}
+              </span>
             </>
           )}
           {idx != null && total != null && (
