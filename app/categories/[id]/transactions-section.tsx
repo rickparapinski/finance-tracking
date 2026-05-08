@@ -63,6 +63,7 @@ export function TransactionsSection({
         categories={categories}
         accounts={accounts}
         uncategorizedCount={0}
+        compact
       />
     </section>
   );

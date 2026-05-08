@@ -43,6 +43,8 @@ interface DataTableProps {
   cycleTo?: string;
   prevCycleFrom?: string;
   prevCycleTo?: string;
+  /** When true the table card shrinks to fit its rows instead of filling the viewport */
+  compact?: boolean;
 }
 
 const fmt = (n: number) =>
@@ -74,6 +76,7 @@ export function DataTable({
   cycleTo = "",
   prevCycleFrom = "",
   prevCycleTo = "",
+  compact = false,
 }: DataTableProps) {
   // Presets inside component — captures cycle props
   const PRESETS: Preset[] = [
@@ -371,7 +374,7 @@ export function DataTable({
 
       {/* ── Card 3: table + footer summary + pagination — fills remaining viewport ── */}
       <AnimateIn delay={90}>
-      <div className={`${card} overflow-hidden flex flex-col min-h-[calc(100vh-260px)]`}>
+      <div className={`${card} overflow-hidden flex flex-col ${compact ? "" : "min-h-[calc(100vh-260px)]"}`}>
         <table className="w-full text-sm flex-1">
           <thead className="bg-ink/[0.03] border-b border-ink/10">
             {table.getHeaderGroups().map((hg) => (
