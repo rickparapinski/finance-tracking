@@ -52,8 +52,19 @@ export function CategoriesClientPage({
       maximumFractionDigits: 2,
     }).format(n);
 
-  const income  = categories.filter((c) => c.type === "income");
-  const expense = categories.filter((c) => c.type === "expense");
+  const sortByPct = (a: Category, b: Category) => {
+    const budA = Number(a.monthly_budget ?? 0);
+    const budB = Number(b.monthly_budget ?? 0);
+    if (!budA && !budB) return 0;
+    if (!budA) return 1;   // no budget → end
+    if (!budB) return -1;
+    const pctA = (spendingMap[a.name] ?? 0) / budA;
+    const pctB = (spendingMap[b.name] ?? 0) / budB;
+    return pctB - pctA;   // highest % first
+  };
+
+  const income  = categories.filter((c) => c.type === "income").sort(sortByPct);
+  const expense = categories.filter((c) => c.type === "expense").sort(sortByPct);
 
   return (
     <div className="space-y-6">
