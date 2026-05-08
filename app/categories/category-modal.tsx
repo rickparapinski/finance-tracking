@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { createCategory, updateCategory } from "./actions";
+import {
+  CategoryIcon,
+  ALL_ICON_KEYS,
+  ICON_LABELS,
+  getIconKey,
+} from "@/components/icons/CategoryIcon";
 
 type Category = {
   id: string;
@@ -38,6 +44,7 @@ export function CategoryModal({
     name: "",
     type: "expense",
     budget: "",
+    icon: "",     // "" = auto-map from name; otherwise an IconKey string
     isActive: true,
   });
 
@@ -48,10 +55,11 @@ export function CategoryModal({
         name: categoryToEdit.name,
         type: categoryToEdit.type,
         budget: String(categoryToEdit.monthly_budget ?? ""),
+        icon: categoryToEdit.color ?? "",   // color column stores icon key
         isActive: categoryToEdit.is_active,
       });
     } else {
-      setForm({ name: "", type: "expense", budget: "", isActive: true });
+      setForm({ name: "", type: "expense", budget: "", icon: "", isActive: true });
     }
   }, [isOpen, categoryToEdit]);
 
@@ -62,6 +70,7 @@ export function CategoryModal({
     formData.append("name", form.name);
     formData.append("type", form.type);
     formData.append("monthly_budget", form.budget);
+    formData.append("color", form.icon);   // stored in color column as icon key
     if (form.isActive) formData.append("is_active", "on");
     try {
       if (categoryToEdit) {
@@ -112,6 +121,48 @@ export function CategoryModal({
               required
               className={inputCls}
             />
+          </div>
+
+          {/* ── Icon picker ── */}
+          <div>
+            <label className={labelCls}>icon</label>
+            <div className="grid grid-cols-8 gap-1.5">
+              {/* Auto tile — uses name-based mapping */}
+              <IconTile
+                label="auto"
+                selected={form.icon === ""}
+                onClick={() => setForm({ ...form, icon: "" })}
+              >
+                {/* Show the auto-resolved icon (or dot-grid) dimmed */}
+                <CategoryIcon
+                  category={form.name}
+                  className="w-4 h-4"
+                />
+              </IconTile>
+
+              {ALL_ICON_KEYS.map((k) => (
+                <IconTile
+                  key={k}
+                  label={ICON_LABELS[k]}
+                  selected={form.icon === k}
+                  onClick={() => setForm({ ...form, icon: k })}
+                >
+                  <CategoryIcon
+                    category=""
+                    iconKey={k}
+                    className="w-4 h-4"
+                  />
+                </IconTile>
+              ))}
+            </div>
+            {form.icon === "" && (
+              <p className="font-mono text-[10px] text-ink-soft mt-1.5">
+                auto: mapped from name
+                {getIconKey(form.name)
+                  ? ` → ${getIconKey(form.name)}`
+                  : " → no match (dot grid)"}
+              </p>
+            )}
           </div>
 
           {/* type + budget */}
@@ -184,5 +235,37 @@ export function CategoryModal({
         </form>
       </div>
     </div>
+  );
+}
+
+// ── Icon picker tile ─────────────────────────────────────────────────────────
+function IconTile({
+  label,
+  selected,
+  onClick,
+  children,
+}: {
+  label: string;
+  selected: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      onClick={onClick}
+      className={[
+        "flex flex-col items-center justify-center gap-0.5 rounded-md border-2 py-1.5 transition-none",
+        selected
+          ? "bg-ink border-ink text-cream-soft"
+          : "bg-surface border-ink/20 text-ink hover:border-ink hover:bg-cream-soft",
+      ].join(" ")}
+    >
+      {children}
+      <span className="font-mono text-[8px] leading-none truncate w-full text-center px-0.5">
+        {label}
+      </span>
+    </button>
   );
 }

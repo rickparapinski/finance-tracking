@@ -162,7 +162,7 @@ function CategoryCard({
       {over ? (
         <div className="bg-ink px-3 py-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <CategoryIcon category={c.name} className="w-6 h-6 shrink-0 text-[#F4EFE3]" />
+            <CategoryIcon category={c.name} iconKey={c.color} className="w-6 h-6 shrink-0 text-[#F4EFE3]" />
             <span className="font-mono text-sm text-cream-soft lowercase truncate">
               {c.name}
             </span>
@@ -178,7 +178,7 @@ function CategoryCard({
       ) : (
         <div className="px-4 pt-4 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <CategoryIcon category={c.name} className="w-6 h-6 shrink-0 text-[#1F1F1F]" />
+            <CategoryIcon category={c.name} iconKey={c.color} className="w-6 h-6 shrink-0 text-[#1F1F1F]" />
             <span className="font-mono text-sm text-ink lowercase truncate">
               {c.name}
             </span>

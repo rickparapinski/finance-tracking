@@ -69,7 +69,7 @@ export function CategoryDetailClient({
       <div className="flex flex-wrap items-start justify-between gap-3">
         {/* Left: icon + name + meta */}
         <div className="flex items-center gap-3">
-          <CategoryIcon category={category.name} className="w-6 h-6 text-[#1F1F1F] shrink-0" />
+          <CategoryIcon category={category.name} iconKey={category.color} className="w-6 h-6 text-[#1F1F1F] shrink-0" />
           <div>
             <h1 className="font-pixel text-2xl text-ink leading-none lowercase">
               {category.name}

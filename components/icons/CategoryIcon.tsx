@@ -3,7 +3,7 @@
 // Pixel-art SVG icons from Streamline — all paths use fill="currentColor".
 // Add new icons by extending ICONS and getIconKey below.
 
-type IconKey =
+export type IconKey =
   | "beauty"
   | "housing"
   | "bills"
@@ -19,6 +19,30 @@ type IconKey =
   | "subscriptions"
   | "gym"
   | "transport";
+
+export const ALL_ICON_KEYS: IconKey[] = [
+  "beauty", "housing", "bills", "entertainment", "food", "health",
+  "debt", "income", "savings", "transfer", "shopping", "shopping2",
+  "subscriptions", "gym", "transport",
+];
+
+export const ICON_LABELS: Record<IconKey, string> = {
+  beauty: "beauty",
+  housing: "housing",
+  bills: "bills",
+  entertainment: "entertain",
+  food: "food",
+  health: "health",
+  debt: "debt",
+  income: "income",
+  savings: "savings",
+  transfer: "transfer",
+  shopping: "shop",
+  shopping2: "cart",
+  subscriptions: "subs",
+  gym: "gym",
+  transport: "transport",
+};
 
 // Raw inner-SVG path strings (fill="#000000" replaced with fill="currentColor")
 const ICONS: Record<IconKey, string> = {
@@ -54,7 +78,7 @@ const ICONS: Record<IconKey, string> = {
 };
 
 /** Map a category name to an icon key via keyword matching. */
-function getIconKey(category: string): IconKey | null {
+export function getIconKey(category: string): IconKey | null {
   const c = category.toLowerCase();
   if (/beauty|barber|hair|grooming|personal care|cosmetic|spa/.test(c)) return "beauty";
   if (/hous|rent|home|mortgage|apartment|real estate|accommodation/.test(c)) return "housing";
@@ -75,11 +99,16 @@ function getIconKey(category: string): IconKey | null {
 
 interface CategoryIconProps {
   category: string;
+  /** Explicit icon key override — if set and valid, used directly instead of auto-mapping. */
+  iconKey?: string | null;
   className?: string;
 }
 
-export function CategoryIcon({ category, className = "w-6 h-6" }: CategoryIconProps) {
-  const key = getIconKey(category);
+export function CategoryIcon({ category, iconKey, className = "w-6 h-6" }: CategoryIconProps) {
+  const key =
+    iconKey && iconKey in ICONS
+      ? (iconKey as IconKey)
+      : getIconKey(category);
 
   if (!key) {
     // Fallback: 2×2 pixel dot-grid, same visual weight as the real icons
