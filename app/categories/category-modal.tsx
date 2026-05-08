@@ -38,7 +38,6 @@ export function CategoryModal({
     name: "",
     type: "expense",
     budget: "",
-    color: "",
     isActive: true,
   });
 
@@ -49,11 +48,10 @@ export function CategoryModal({
         name: categoryToEdit.name,
         type: categoryToEdit.type,
         budget: String(categoryToEdit.monthly_budget ?? ""),
-        color: categoryToEdit.color ?? "",
         isActive: categoryToEdit.is_active,
       });
     } else {
-      setForm({ name: "", type: "expense", budget: "", color: "", isActive: true });
+      setForm({ name: "", type: "expense", budget: "", isActive: true });
     }
   }, [isOpen, categoryToEdit]);
 
@@ -64,7 +62,6 @@ export function CategoryModal({
     formData.append("name", form.name);
     formData.append("type", form.type);
     formData.append("monthly_budget", form.budget);
-    formData.append("color", form.color);
     if (form.isActive) formData.append("is_active", "on");
     try {
       if (categoryToEdit) {
@@ -105,27 +102,16 @@ export function CategoryModal({
         {/* ── Form ── */}
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
 
-          {/* name + color */}
-          <div className="grid grid-cols-4 gap-3">
-            <div className="col-span-3">
-              <label className={labelCls}>name</label>
-              <input
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. groceries"
-                required
-                className={inputCls}
-              />
-            </div>
-            <div className="col-span-1">
-              <label className={labelCls}>color</label>
-              <input
-                type="color"
-                value={form.color || "#C5F03A"}
-                onChange={(e) => setForm({ ...form, color: e.target.value })}
-                className="h-9 w-full rounded-md border-2 border-ink bg-white p-1 cursor-pointer focus:outline-none focus:border-ink/70 transition-none"
-              />
-            </div>
+          {/* name */}
+          <div>
+            <label className={labelCls}>name</label>
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="e.g. groceries"
+              required
+              className={inputCls}
+            />
           </div>
 
           {/* type + budget */}
@@ -161,7 +147,7 @@ export function CategoryModal({
                   type="checkbox"
                   checked={form.isActive}
                   onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                  className="rounded border-ink text-ink h-4 w-4 focus:ring-ink/20"
+                  className="rounded border-ink accent-[#1F1F1F] h-4 w-4"
                 />
                 <span className="font-mono text-sm text-ink">active category</span>
               </label>
@@ -175,7 +161,7 @@ export function CategoryModal({
               <button
                 type="button"
                 onClick={() => { onClose(); onDelete(); }}
-                className="font-mono text-xs text-ink-soft hover:text-ink underline transition-none mr-auto"
+                className="font-mono text-xs text-ink-soft transition-none mr-auto"
               >
                 delete category
               </button>
