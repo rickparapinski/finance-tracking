@@ -95,7 +95,7 @@ export function CategoriesClientPage({
       {/* ── Income section ── */}
       {income.length > 0 && (
         <section className="space-y-3">
-          <h2 className="font-mono text-[10px] uppercase tracking-widest text-ink-soft">
+          <h2 className="font-mono text-xs text-ink-soft">
             income
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -114,7 +114,7 @@ export function CategoriesClientPage({
       {/* ── Expense section ── */}
       {expense.length > 0 && (
         <section className="space-y-3">
-          <h2 className="font-mono text-[10px] uppercase tracking-widest text-ink-soft">
+          <h2 className="font-mono text-xs text-ink-soft">
             expenses
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
@@ -158,27 +158,28 @@ function CategoryCard({
       href={`/categories/${c.slug ?? c.id}`}
       className="block rounded-md border-2 border-ink bg-surface overflow-hidden hover:shadow-[2px_2px_0_rgba(31,31,31,0.12)] transition-none group"
     >
-      {/* ── Over-budget dark slab ── */}
-      {over && (
-        <div className="bg-ink px-3 py-1.5 flex items-center justify-between gap-2">
-          <span className="font-mono text-[10px] text-cream-soft uppercase tracking-wider">
-            over budget
-          </span>
-          <span className="font-mono text-[10px] text-cream-soft/70">
-            +{fmt(spent - budget)}
-          </span>
-        </div>
-      )}
-
-      <div className="p-4 space-y-3">
-        {/* ── Name row ── */}
-        <div className="flex items-center justify-between gap-2">
+      {/* ── Over-budget dark slab — icon lives here so cream is visible ── */}
+      {over ? (
+        <div className="bg-ink px-3 py-2 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
-            <CategoryIcon
-              category={c.name}
-              className={`w-6 h-6 shrink-0 ${over ? "text-[#F4EFE3]" : "text-[#1F1F1F]"}`}
-            />
-            <span className="font-mono text-sm text-ink truncate">
+            <CategoryIcon category={c.name} className="w-6 h-6 shrink-0 text-[#F4EFE3]" />
+            <span className="font-mono text-sm text-cream-soft lowercase truncate">
+              {c.name}
+            </span>
+            {!c.is_active && (
+              <span className="font-mono text-[10px] text-cream-soft/50 shrink-0">inactive</span>
+            )}
+          </div>
+          <div className="text-right shrink-0">
+            <span className="font-mono text-[10px] text-cream-soft/60 block">over budget</span>
+            <span className="font-mono text-[10px] text-cream-soft/50">+{fmt(spent - budget)}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="px-4 pt-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <CategoryIcon category={c.name} className="w-6 h-6 shrink-0 text-[#1F1F1F]" />
+            <span className="font-mono text-sm text-ink lowercase truncate">
               {c.name}
             </span>
             {!c.is_active && (
@@ -191,15 +192,23 @@ function CategoryCard({
             {fmt(spent)}
           </span>
         </div>
+      )}
 
-        {/* ── Budget bar ── */}
+      <div className="px-4 pb-4 pt-3 space-y-1.5">
         {budget > 0 ? (
-          <div className="space-y-1.5">
-            <Segs filled={filled} dark={false} />
+          <>
+            <div className="flex items-center justify-between">
+              <Segs filled={filled} dark={false} className="flex-1 mr-3" />
+              {over && (
+                <span className="font-mono text-sm text-ink tabular-nums shrink-0">
+                  {fmt(spent)}
+                </span>
+              )}
+            </div>
             <p className="font-mono text-[10px] text-ink-soft">
               {Math.round(pct * 100)}% of {fmt(budget)}
             </p>
-          </div>
+          </>
         ) : (
           <p className="font-mono text-[10px] text-ink-soft">no budget set</p>
         )}
