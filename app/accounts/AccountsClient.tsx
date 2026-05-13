@@ -271,11 +271,11 @@ function AccountCard({
 
         {/* ── Header: type icon + name + type + over-utilized chip ── */}
         <div className="flex items-start justify-between gap-2">
-          <div className="flex items-start gap-2 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
             {/* Account type icon — cream on charcoal, ink on white */}
             <AccountIcon
               type={acc.type}
-              className={`w-6 h-6 shrink-0 mt-0.5 ${isOverUtilized ? "text-[#F4EFE3]" : "text-ink"}`}
+              className={`w-6 h-6 shrink-0 ${isOverUtilized ? "text-[#F4EFE3]" : "text-ink"}`}
             />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
