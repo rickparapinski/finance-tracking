@@ -5,9 +5,9 @@ import Link from "next/link";
 import { X } from "lucide-react";
 import { upsertAccount, archiveAccount, restoreAccount } from "./actions";
 import { EditAccountModal, Account } from "./edit-modal";
-import { bankLogo } from "@/lib/bank-logo";
 import { useHideBalances } from "@/contexts/hide-balances";
 import { Segs } from "@/components/ui/segs";
+import { AccountIcon } from "@/components/icons/AccountIcon";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -218,7 +218,6 @@ function AccountCard({
   account: Account;
   onEdit: (acc: Account) => void;
 }) {
-  const logo       = bankLogo(acc.name);
   const isArchived = (acc.status ?? "active") === "archived";
   const balance    = acc.balance ?? Number(acc.initial_balance);
   const balanceEur = acc.balance_eur;
@@ -270,26 +269,29 @@ function AccountCard({
     >
       <div className="p-4 flex flex-col gap-3 flex-1">
 
-        {/* ── Header: initials + name + type + over-utilized chip ── */}
+        {/* ── Header: type icon + name + type + over-utilized chip ── */}
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 flex-wrap">
-              {/* Inline initials — no box, no circle */}
-              <span className={`font-mono text-xs ${textSecondary} shrink-0`}>
-                {logo.initials}
-              </span>
-              <span className={`font-mono text-sm ${textPrimary} lowercase truncate`}>
-                {acc.name}
-              </span>
-              {isArchived && (
-                <span className={`font-mono text-[10px] ${textSecondary} shrink-0`}>
-                  archived
+          <div className="flex items-start gap-2 min-w-0">
+            {/* Account type icon — cream on charcoal, ink on white */}
+            <AccountIcon
+              type={acc.type}
+              className={`w-6 h-6 shrink-0 mt-0.5 ${isOverUtilized ? "text-[#F4EFE3]" : "text-ink"}`}
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`font-pixel text-base ${textPrimary} lowercase truncate`}>
+                  {acc.name}
                 </span>
-              )}
+                {isArchived && (
+                  <span className={`font-mono text-[10px] ${textSecondary} shrink-0`}>
+                    archived
+                  </span>
+                )}
+              </div>
+              <span className={`font-mono text-xs ${textSecondary} lowercase`}>
+                {acc.type.toLowerCase()}
+              </span>
             </div>
-            <span className={`font-mono text-xs ${textSecondary} lowercase`}>
-              {acc.type.toLowerCase()}
-            </span>
           </div>
 
           {/* Over-utilized chip — lime on charcoal, mirrors over-budget on categories */}
