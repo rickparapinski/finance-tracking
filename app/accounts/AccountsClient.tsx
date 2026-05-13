@@ -288,9 +288,6 @@ function AccountCard({
                   </span>
                 )}
               </div>
-              <span className={`font-mono text-xs ${textSecondary} lowercase`}>
-                {acc.type.toLowerCase()}
-              </span>
             </div>
           </div>
 
