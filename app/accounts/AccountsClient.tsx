@@ -263,11 +263,11 @@ function AccountCard({
 
   return (
     <div
-      className={`rounded-md border-2 border-ink overflow-hidden flex flex-col ${
+      className={`self-start w-full rounded-md border-2 border-ink overflow-hidden flex flex-col ${
         isOverUtilized ? "bg-ink" : "bg-surface"
       } ${isArchived ? "opacity-60" : ""}`}
     >
-      <div className="p-4 flex flex-col gap-3 flex-1">
+      <div className="p-4 flex flex-col gap-3">
 
         {/* ── Header: type icon + name + type + over-utilized chip ── */}
         <div className="flex items-start justify-between gap-2">
@@ -351,7 +351,7 @@ function AccountCard({
       </div>
 
       {/* ── Footer actions ── */}
-      <div className={`px-4 pb-3 pt-2 flex items-center justify-between gap-2 mt-auto border-t ${borderSplit}`}>
+      <div className={`px-4 pb-3 pt-2 flex items-center justify-between gap-2 border-t ${borderSplit}`}>
         <Link
           href={`/accounts/${acc.id}`}
           className={`font-mono text-xs ${textSecondary} ${hoverPrimary} transition-none`}
