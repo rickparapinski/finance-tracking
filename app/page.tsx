@@ -1,15 +1,20 @@
 import { sql } from "@/lib/db";
-import { formatCurrency } from "@/lib/finance-utils";
 import { fetchCurrentCycle } from "@/lib/fetch-cycle";
-import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowUpRight, ArrowDownRight, Wallet } from "lucide-react";
 import { AllTransactionsCard } from "@/components/dashboard/all-transactions-card";
-import { ReportsCard } from "@/components/dashboard/reports-card";
+import { SurvivalCard } from "@/components/dashboard/survival-card";
 import { SchedulerCard } from "@/components/dashboard/scheduler-card";
-import { cn } from "@/lib/utils";
+import { categoryColor } from "@/lib/category-color";
+import { DashboardCard } from "@/components/dashboard/dashboard-card";
 
 export const revalidate = 0;
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat("de-DE", {
+    style: "currency",
+    currency: "EUR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(n);
 
 export default async function Dashboard() {
   const { start, end } = await fetchCurrentCycle();
@@ -17,166 +22,192 @@ export default async function Dashboard() {
   const startStr = start.toISOString().split("T")[0];
   const endStr = end.toISOString().split("T")[0];
 
-  const accounts = await sql`
-    SELECT id, name, currency, type, initial_balance
-    FROM accounts
-    ORDER BY name
-  `;
+  // ── Queries ───────────────────────────────────────────────────────────────
+  const [accounts, cycleTransactions, allHistory, categories] = await Promise.all([
+    sql`SELECT id, currency, initial_balance, initial_balance_eur FROM accounts`,
+    sql`
+      SELECT category, COALESCE(amount_eur, amount) AS eur_amount, description, date, id
+      FROM transactions
+      WHERE date >= ${startStr} AND date <= ${endStr}
+      ORDER BY date DESC
+    `,
+    sql`SELECT account_id, COALESCE(amount_eur, amount) AS eur_amount FROM transactions`,
+    sql`
+      SELECT name, type, color, monthly_budget
+      FROM categories
+      WHERE monthly_budget IS NOT NULL AND monthly_budget > 0 AND is_active = true
+      ORDER BY type DESC, monthly_budget DESC
+    `,
+  ]);
 
-  const cycleTransactions = await sql`
-    SELECT * FROM transactions
-    WHERE date >= ${startStr} AND date <= ${endStr}
-    ORDER BY date DESC
-  `;
+  // ── Net worth ─────────────────────────────────────────────────────────────
+  const netWorth = accounts.reduce((sum: number, acc: any) => {
+    const eurActivity = allHistory
+      .filter((t: any) => t.account_id === acc.id)
+      .reduce((s: number, t: any) => s + Number(t.eur_amount), 0);
+    const eurBase =
+      acc.initial_balance_eur != null
+        ? Number(acc.initial_balance_eur)
+        : acc.currency === "EUR"
+        ? Number(acc.initial_balance)
+        : 0;
+    return sum + eurBase + eurActivity;
+  }, 0);
 
-  const allHistory = await sql`
-    SELECT account_id, amount FROM transactions
-  `;
+  // ── Survival / daily budget ───────────────────────────────────────────────
+  const salary = categories
+    .filter((c: any) => c.type === "income")
+    .reduce((s: number, c: any) => s + Number(c.monthly_budget), 0);
 
-  // A. Calculate Account Balances
-  const accountBalances = accounts.map((acc) => {
-    const totalActivity =
-      allHistory
-        .filter((t) => t.account_id === acc.id)
-        .reduce((sum, t) => sum + Number(t.amount), 0);
+  const plannedExpenses = categories
+    .filter((c: any) => c.type === "expense")
+    .reduce((s: number, c: any) => s + Number(c.monthly_budget), 0);
 
-    return {
-      ...acc,
-      currentBalance: Number(acc.initial_balance) + totalActivity,
-    };
-  });
+  const freePool = salary - plannedExpenses;
 
-  // B. Calculate Monthly Stats
-  let totalIncome = 0;
+  const today = new Date();
+  const daysTotal = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+  const daysLeft = Math.max(
+    0,
+    Math.round((end.getTime() - today.getTime()) / 86400000) + 1,
+  );
+
+  // ── Cycle spending stats ──────────────────────────────────────────────────
+  const categorySpend: Record<string, number> = {};
   let totalExpense = 0;
-  const categoryTotals: Record<string, number> = {};
 
-  cycleTransactions.forEach((t) => {
-    if (t.category === "Transfer") return;
-
-    const val = Number(t.amount_eur ?? t.amount);
-
+  for (const t of cycleTransactions) {
+    if (t.category === "Transfer") continue;
+    const val = Number(t.eur_amount);
     if (val < 0) {
       totalExpense += Math.abs(val);
       const cat = t.category || "Uncategorized";
-      categoryTotals[cat] = (categoryTotals[cat] || 0) + Math.abs(val);
-    } else {
-      totalIncome += val;
+      categorySpend[cat] = (categorySpend[cat] || 0) + Math.abs(val);
     }
-  });
+  }
 
-  const netResult = totalIncome - totalExpense;
-  const sortedCategories = Object.entries(categoryTotals).sort(
-    ([, a], [, b]) => b - a,
+  // Build enriched spending rows: merge actual spend with category budget info
+  const budgetByName = Object.fromEntries(
+    categories.map((c: any) => [c.name, { budget: Number(c.monthly_budget), color: c.color as string | null }]),
   );
 
-  const top3Transactions = cycleTransactions.slice(0, 3).map((t) => {
-    const val = Number(t.amount_eur ?? t.amount);
-    return {
-      id: String(t.id),
-      description: t.description,
-      category: t.category,
-      date: t.date,
-      amount: val,
-      currency: "EUR",
-    };
-  });
+  const spendingRows = Object.entries(categorySpend)
+    .map(([name, spent]) => ({
+      name,
+      spent,
+      budget: budgetByName[name]?.budget ?? null,
+      color: budgetByName[name]?.color ?? null,
+    }))
+    .sort((a, b) => b.spent - a.spent);
 
-  const netWorth = accountBalances.reduce(
-    (sum, a) => sum + (a.currentBalance || 0),
-    0,
-  );
-  const spentThisCycle = totalExpense;
+  // Recent transactions for top card
+  const top3Transactions = cycleTransactions.slice(0, 3).map((t: any) => ({
+    id: String(t.id),
+    description: t.description,
+    category: t.category,
+    date: t.date,
+    amount: Number(t.eur_amount),
+    currency: "EUR",
+  }));
 
   return (
     <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-8">
       <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-          Overview
-        </h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Overview</h1>
         <p className="text-sm text-slate-500">
-          {start.toLocaleDateString()} — {end.toLocaleDateString()}
+          {start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} —{" "}
+          {end.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
         </p>
       </header>
 
+      {/* Top 3 cards */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
         <AllTransactionsCard items={top3Transactions} currency="EUR" />
-        <ReportsCard worth={netWorth} spent={spentThisCycle} currency="EUR" />
+        <SurvivalCard
+          salary={salary}
+          plannedExpenses={plannedExpenses}
+          freePool={freePool}
+          daysLeft={daysLeft}
+          daysTotal={daysTotal}
+        />
         <SchedulerCard />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Top Spending</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5">
-            {sortedCategories.slice(0, 6).map(([cat, amount]) => {
-              const percentage = Math.round((amount / totalExpense) * 100) || 0;
-              return (
-                <div key={cat}>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="font-medium">{cat}</span>
-                    <span className="text-zinc-500">
-                      {formatCurrency(amount)} ({percentage}%)
-                    </span>
+      {/* Top Spending */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <DashboardCard title="Top Spending" className="lg:col-span-2">
+          {spendingRows.length === 0 ? (
+            <p className="text-sm text-slate-400 italic">No expenses yet this cycle.</p>
+          ) : (
+            <div className="space-y-3">
+              {spendingRows.slice(0, 8).map(({ name, spent, budget, color }) => {
+                const dot = categoryColor(name, color);
+                const pct = totalExpense > 0 ? Math.round((spent / totalExpense) * 100) : 0;
+                const budgetPct = budget ? Math.min(100, Math.round((spent / budget) * 100)) : null;
+                const over = budget != null && spent > budget;
+
+                return (
+                  <div key={name} className="space-y-1">
+                    <div className="flex items-center justify-between text-sm gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="shrink-0 h-2 w-2 rounded-full"
+                          style={{ backgroundColor: dot }}
+                        />
+                        <span className="font-medium text-slate-700 truncate">{name}</span>
+                        {over && (
+                          <span className="shrink-0 text-[10px] font-semibold text-rose-500 bg-rose-50 px-1.5 py-0.5 rounded-full">
+                            over
+                          </span>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right tabular-nums text-xs text-slate-500">
+                        {fmt(spent)}
+                        {budget != null && (
+                          <span className="text-slate-300"> / {fmt(budget)}</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Progress bar: budget if set, else share of total */}
+                    <div className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all"
+                        style={{
+                          width: `${budgetPct ?? pct}%`,
+                          backgroundColor: over ? "#ef4444" : dot,
+                          opacity: 0.75,
+                        }}
+                      />
+                    </div>
                   </div>
-                  <div className="w-full bg-zinc-100 dark:bg-zinc-800 rounded-full h-2">
-                    <div
-                      className="bg-zinc-900 dark:bg-zinc-100 h-2 rounded-full"
-                      style={{ width: `${percentage}%` }}
-                    ></div>
-                  </div>
-                </div>
-              );
-            })}
-            {sortedCategories.length === 0 && (
-              <p className="text-zinc-500 italic">
-                No expenses yet this cycle.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+                );
+              })}
+            </div>
+          )}
+        </DashboardCard>
+
+        {/* Net worth summary */}
+        <div className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-softer)] flex flex-col justify-between">
+          <h2 className="text-sm font-semibold text-slate-900 mb-4">Net Worth</h2>
+          <div>
+            <p className="text-3xl font-bold tabular-nums text-slate-900">{fmt(netWorth)}</p>
+            <p className="text-xs text-slate-400 mt-1">across all accounts</p>
+          </div>
+          <div className="mt-6 space-y-1 border-t border-slate-100 pt-4">
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>Spent this cycle</span>
+              <span className="tabular-nums text-rose-500">{fmt(totalExpense)}</span>
+            </div>
+            <div className="flex justify-between text-xs text-slate-500">
+              <span>Free pool</span>
+              <span className={`tabular-nums font-medium ${freePool >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                {fmt(freePool)}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </main>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-  type,
-}: {
-  title: string;
-  value: number;
-  type: "income" | "expense" | "neutral";
-}) {
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-zinc-500">
-          {title}
-        </CardTitle>
-        {type === "income" && (
-          <ArrowUpRight className="h-4 w-4 text-emerald-500" />
-        )}
-        {type === "expense" && (
-          <ArrowDownRight className="h-4 w-4 text-red-500" />
-        )}
-        {type === "neutral" && <Wallet className="h-4 w-4 text-zinc-500" />}
-      </CardHeader>
-      <CardContent>
-        <div
-          className={cn(
-            "text-2xl font-bold",
-            type === "expense" && "text-red-600",
-            type === "income" && "text-emerald-600",
-            type === "neutral" && "text-zinc-900 dark:text-zinc-50",
-          )}
-        >
-          {formatCurrency(value)}
-        </div>
-      </CardContent>
-    </Card>
   );
 }

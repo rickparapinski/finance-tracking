@@ -3,7 +3,7 @@ import { ForecastTable } from "./ForecastTable";
 import { UnmatchedList } from "./UnmatchedList";
 import { AddRuleModal } from "./AddRuleModal";
 import { ManageRulesModal } from "./ManageRulesModal";
-import { generateForecastInstances } from "./actions";
+import { generateForecastInstances, clearAllRules } from "./actions";
 import { getCycleKeyForDate } from "@/lib/finance-utils";
 
 export const revalidate = 0;
@@ -28,8 +28,10 @@ export default async function ForecastPage({
   const fetchStart = new Date(Date.UTC(year - 1, 10, 1)).toISOString().split("T")[0];
   const fetchEnd = new Date(Date.UTC(year + 1, 2, 1)).toISOString().split("T")[0];
 
-  const [accounts, txInRange, rules, dbCycles, categories] = await Promise.all([
-    sql`SELECT * FROM accounts`,
+  const yearStart = `${year}-01-01`;
+
+  const [accounts, txInRange, rules, dbCycles, categories, txBeforeYear] = await Promise.all([
+    sql`SELECT id, name, currency, initial_balance, initial_balance_eur, nature FROM accounts`,
     sql`
       SELECT account_id, amount, amount_eur, date, description, category, id
       FROM transactions
@@ -39,9 +41,40 @@ export default async function ForecastPage({
     sql`SELECT * FROM forecast_rules WHERE is_active = true`,
     sql`SELECT * FROM cycles`,
     sql`SELECT id, name FROM categories ORDER BY name`,
+    sql`
+      SELECT account_id, COALESCE(amount_eur, amount) AS eur_amount
+      FROM transactions
+      WHERE date < ${yearStart}
+    `,
   ]);
 
-  await generateForecastInstances({ startDate: `${year}-01-01`, horizonMonths: 12 });
+  await generateForecastInstances({ startDate: yearStart, horizonMonths: 12 });
+
+  // Opening balance = liquid (asset) accounts only
+  const assetAccounts = accounts.filter((a: any) => a.nature === "asset");
+  const assetIds = new Set(assetAccounts.map((a: any) => String(a.id)));
+
+  const openingBalance = assetAccounts.reduce((sum: number, acc: any) => {
+    const eurActivity = txBeforeYear
+      .filter((t: any) => t.account_id === acc.id)
+      .reduce((s: number, t: any) => s + Number(t.eur_amount), 0);
+    const eurBase =
+      acc.initial_balance_eur != null
+        ? Number(acc.initial_balance_eur)
+        : acc.currency === "EUR"
+        ? Number(acc.initial_balance)
+        : 0;
+    return sum + eurBase + eurActivity;
+  }, 0);
+
+  // Monthly actuals: sum of asset account transactions per month (direct, not via forecast_instances)
+  const monthlyActuals: Record<string, number> = {};
+  for (const tx of txInRange) {
+    if (!assetIds.has(String(tx.account_id))) continue;
+    const k = getSmartCycleKey(new Date(tx.date), dbCycles);
+    if (!k.startsWith(`${year}-`)) continue;
+    monthlyActuals[k] = (monthlyActuals[k] || 0) + Number(tx.amount_eur ?? tx.amount);
+  }
 
   const fcInRange = await sql`
     SELECT * FROM forecast_instances
@@ -69,10 +102,15 @@ export default async function ForecastPage({
     fcInRange.filter((f) => f.transaction_id).map((f) => f.transaction_id),
   );
 
-  const unmatchedTx = txInRange.filter((tx) => {
+  // Only recurring/one_off rules need manual linking — budget rules aggregate automatically
+  const linkableCategories = new Set(
+    rules.filter((r: any) => r.type !== "budget").map((r: any) => r.category).filter(Boolean)
+  );
+
+  const unmatchedTx = txInRange.filter((tx: any) => {
     if (linkedTxIds.has(tx.id)) return false;
-    if (tx.category && tx.category !== "Uncategorized") return false;
-    return true;
+    if (tx.category === "Transfer") return false;
+    return linkableCategories.has(tx.category);
   });
 
   const enrichedProjected = relevantForecastInstances
@@ -169,6 +207,7 @@ export default async function ForecastPage({
     });
   }
 
+  const today = new Date();
   const months = Array.from({ length: 12 }, (_, i) => i);
   const tableRows = months.map((monthIndex) => {
     const cycleMonthStr = String(monthIndex + 1).padStart(2, "0");
@@ -178,15 +217,19 @@ export default async function ForecastPage({
       year: "numeric",
     });
 
+    // For fully past months, only count realized transactions (not projections)
+    const monthEnd = new Date(year, monthIndex + 1, 0);
+    const isPastMonth = monthEnd < today;
+
     const items = detailsByMonth[key] ?? [];
-    const actual = items.filter((i) => i.status === "realized").reduce((sum, i) => sum + i.amount, 0);
-    const projected = items.filter((i) => i.status === "projected").reduce((sum, i) => sum + i.amount, 0);
+    const actual = monthlyActuals[key] ?? 0;
+    const projected = isPastMonth ? 0 : items.filter((i) => i.status === "projected").reduce((sum, i) => sum + i.amount, 0);
     const net = actual + projected;
 
     return { key, label, opening: 0, actual, projected, net, closing: net };
   });
 
-  let runningBalance = 0;
+  let runningBalance = openingBalance;
   const rowsWithBalance = tableRows.map((row) => {
     const opening = runningBalance;
     const closing = opening + row.net;
@@ -204,11 +247,21 @@ export default async function ForecastPage({
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <ManageRulesModal rules={rules as any} />
+          <ManageRulesModal rules={rules as any} categories={categories as any} accounts={accounts as any} />
           <AddRuleModal
             categories={categories as any}
-            accountId={accounts.find((a: any) => a.name.includes("Revolut Main"))?.id}
+            accounts={accounts as any}
           />
+          {rules.length > 0 && (
+            <form action={clearAllRules}>
+              <button
+                type="submit"
+                className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 transition"
+              >
+                Clear all rules
+              </button>
+            </form>
+          )}
           <div className="h-6 w-px bg-slate-200 mx-2" />
           <a
             className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition"
@@ -233,7 +286,7 @@ export default async function ForecastPage({
         projectedInstances={enrichedProjected}
       />
 
-      <ForecastTable rows={rowsWithBalance} detailsByMonth={detailsByMonth} />
+      <ForecastTable rows={rowsWithBalance} detailsByMonth={detailsByMonth} openingBalance={openingBalance} />
     </main>
   );
 }

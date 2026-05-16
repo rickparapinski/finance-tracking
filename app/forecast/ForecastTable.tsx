@@ -70,9 +70,11 @@ function groupItems(items: FcItem[]) {
 export function ForecastTable({
   rows,
   detailsByMonth,
+  openingBalance,
 }: {
   rows: MonthRow[];
   detailsByMonth: Record<string, FcItem[]>;
+  openingBalance: number;
 }) {
   const [openMonth, setOpenMonth] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -211,16 +213,23 @@ export function ForecastTable({
   };
 
   return (
-    <div className="overflow-x-auto rounded-2xl border border-slate-300 bg-white shadow-[var(--shadow-soft)]">
+    <div className="overflow-x-auto rounded-[var(--radius)] border border-slate-200 bg-white shadow-[var(--shadow-softer)]">
       <table className="min-w-full text-sm">
-        <thead className="bg-slate-50 text-slate-500 border-b border-slate-200">
+        <thead className="bg-slate-50 border-b border-slate-200">
           <tr>
-            <th className="px-4 py-3 text-left font-semibold w-48">Month</th>
-            <th className="px-4 py-3 text-right font-semibold">Opening</th>
-            <th className="px-4 py-3 text-right font-semibold">Actual</th>
-            <th className="px-4 py-3 text-right font-semibold">Projected</th>
-            <th className="px-4 py-3 text-right font-semibold">Net</th>
-            <th className="px-4 py-3 text-right font-semibold">Closing</th>
+            <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-48">Month</th>
+            <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Opening</th>
+            <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actual</th>
+            <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Projected</th>
+            <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Net</th>
+            <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Closing</th>
+          </tr>
+          <tr className="border-b border-indigo-100 bg-indigo-50/50">
+            <td className="px-4 py-2.5 text-xs font-semibold text-indigo-600">Liquid Balance (start of year)</td>
+            <td colSpan={4} />
+            <td className={`px-4 py-2.5 text-right text-xs font-bold tabular-nums ${clsMoneyStrong(openingBalance)}`}>
+              {formatCurrency(openingBalance)}
+            </td>
           </tr>
         </thead>
 
@@ -283,16 +292,12 @@ export function ForecastTable({
                       ) : (
                         <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                           <table className="w-full text-xs">
-                            <thead className="bg-slate-100/50 text-slate-500 font-semibold text-left border-b border-slate-200">
+                            <thead className="bg-slate-50 border-b border-slate-200">
                               <tr>
-                                <th className="px-3 py-2 w-24">Date</th>
-                                <th className="px-3 py-2">
-                                  Rule / Description
-                                </th>
-                                <th className="px-3 py-2 w-24">Status</th>
-                                <th className="px-3 py-2 text-right w-32">
-                                  Amount
-                                </th>
+                                <th className="px-3 py-2 w-24 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date</th>
+                                <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rule / Description</th>
+                                <th className="px-3 py-2 w-24 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
+                                <th className="px-3 py-2 text-right w-32 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Amount</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50 bg-white">

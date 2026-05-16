@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { sql } from "@/lib/db";
 import { fetchCurrentCycle } from "@/lib/fetch-cycle";
+import { buildPeriodList } from "@/lib/periods";
 import { categoryColor } from "@/lib/category-color";
 import { deleteRule, updateRule } from "./rules/actions";
 import { AddRuleForm } from "./rules/add-rule-form";
@@ -23,8 +24,9 @@ export default async function CategoryDetailPage({
   const { start, end, key } = await fetchCurrentCycle();
   const startStr = start.toISOString().slice(0, 10);
   const endStr = end.toISOString().slice(0, 10);
+  const periods = buildPeriodList(startStr, endStr, key);
 
-  const [rules, transactions, cycles, categoriesRows, accountsRows] = await Promise.all([
+  const [rules, transactions, categoriesRows, accountsRows] = await Promise.all([
     sql`SELECT * FROM category_rules WHERE category_id = ${categoryId} ORDER BY priority ASC, pattern ASC`,
     sql`
       SELECT t.*, json_build_object('name', a.name) AS accounts
@@ -34,7 +36,6 @@ export default async function CategoryDetailPage({
         AND t.date >= ${startStr} AND t.date <= ${endStr}
       ORDER BY t.date DESC
     `,
-    sql`SELECT key, start_date, end_date FROM cycles ORDER BY start_date DESC LIMIT 12`,
     sql`SELECT name FROM categories ORDER BY name ASC`,
     sql`SELECT id, name FROM accounts`,
   ]);
@@ -99,10 +100,8 @@ export default async function CategoryDetailPage({
       <TransactionsSection
         categoryName={category.name}
         initialTransactions={transactions as any[]}
-        cycles={cycles as any[]}
+        periods={periods}
         currentCycleKey={key}
-        currentStart={startStr}
-        currentEnd={endStr}
         categories={categoriesRows.map((c: any) => c.name)}
         accounts={accountsRows.map((a: any) => ({ id: a.id, name: a.name }))}
       />
