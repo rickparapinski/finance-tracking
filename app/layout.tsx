@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import { sql } from "@/lib/db";
-import { AppSidebar } from "@/components/layout/app-sidebar";
+import { AppShell } from "@/components/layout/app-shell";
 import { ClientProviders } from "@/components/layout/client-providers";
 import "./globals.css";
 
@@ -30,10 +30,11 @@ export default async function RootLayout({
 
   let accountsWithBalance: any[] = [];
   let inboxCount = 0;
+  let daysSinceLastLog = 0;
 
   if (!isLoginPage) {
     try {
-      const [accounts, txSums, inboxRows] = await Promise.all([
+      const [accounts, txSums, inboxRows, lastLogRows] = await Promise.all([
         sql`
           SELECT id, name, currency, color, initial_balance, initial_balance_eur
           FROM accounts
@@ -45,8 +46,15 @@ export default async function RootLayout({
           GROUP BY account_id
         `,
         sql`SELECT COUNT(*) AS n FROM staged_transactions WHERE status = 'pending'`,
+        sql`SELECT MAX(date) AS last_date FROM transactions`,
       ]);
       inboxCount = Number(inboxRows[0]?.n ?? 0);
+
+      const lastDate = lastLogRows[0]?.last_date;
+      if (lastDate) {
+        const diffMs = Date.now() - new Date(lastDate).getTime();
+        daysSinceLastLog = Math.floor(diffMs / 86400000);
+      }
 
       const eurSumMap: Record<string, number> = {};
       for (const r of txSums) eurSumMap[r.account_id] = Number(r.eur_sum);
@@ -77,12 +85,13 @@ export default async function RootLayout({
           children
         ) : (
           <ClientProviders>
-            <div className="flex min-h-screen">
-              <aside className="hidden md:block fixed inset-y-0 left-0 z-10 w-64 border-r border-border">
-                <AppSidebar accounts={accountsWithBalance} inboxCount={inboxCount} />
-              </aside>
-              <main className="flex-1 md:pl-64">{children}</main>
-            </div>
+            <AppShell
+              accounts={accountsWithBalance}
+              inboxCount={inboxCount}
+              daysSinceLastLog={daysSinceLastLog}
+            >
+              {children}
+            </AppShell>
           </ClientProviders>
         )}
       </body>
