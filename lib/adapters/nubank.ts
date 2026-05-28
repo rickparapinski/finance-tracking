@@ -50,7 +50,7 @@ export const parseNubank = (file: File): Promise<NormalizedTransaction[]> => {
             amount = parseFloat(row["amount"]) * -1;
 
             description = row["title"];
-            category = row["category"] || "Credit Card";
+            category = "Uncategorized"; // Let app categorization rules handle it
           }
 
           transactions.push({

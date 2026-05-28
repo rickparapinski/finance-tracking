@@ -4,81 +4,57 @@ import { useState, useTransition } from "react";
 import { getCategoryTransactions } from "../actions";
 import { DataTable } from "@/app/transactions/data-table";
 import { columns } from "@/app/transactions/columns";
+import { CycleNavigator } from "@/components/cycle-navigator";
+import { type Period } from "@/lib/periods";
 import { Transaction } from "@/lib/adapters/types";
-
-type Cycle = { key: string; start_date: string; end_date: string };
 
 export function TransactionsSection({
   categoryName,
   initialTransactions,
-  cycles,
+  periods,
   currentCycleKey,
-  currentStart,
-  currentEnd,
   categories,
   accounts,
 }: {
   categoryName: string;
   initialTransactions: Transaction[];
-  cycles: Cycle[];
+  periods: Period[];
   currentCycleKey: string;
-  currentStart: string;
-  currentEnd: string;
   categories: string[];
   accounts: { id: string; name: string }[];
 }) {
   const [transactions, setTransactions] = useState(initialTransactions);
-  const [selectedCycle, setSelectedCycle] = useState(currentCycleKey);
+  const [selectedKey, setSelectedKey] = useState(currentCycleKey);
   const [isPending, startTransition] = useTransition();
 
-  const handleCycleChange = (key: string) => {
-    setSelectedCycle(key);
-    const cycle = cycles.find((c) => c.key === key);
-    if (!cycle) return;
+  const handlePeriodChange = (period: Period) => {
+    setSelectedKey(period.key);
     startTransition(async () => {
       const data = await getCategoryTransactions(
         categoryName,
-        cycle.start_date,
-        cycle.end_date,
+        period.start_date,
+        period.end_date,
       );
-      setTransactions(data as Transaction[]);
+      setTransactions(data as unknown as Transaction[]);
     });
   };
 
-  const otherCycles = cycles.filter((c) => c.key !== currentCycleKey);
-
-  function fmtCycleLabel(start: string, end: string) {
-    const f = (s: string) => {
-      const [y, m, d] = s.split("-");
-      return `${parseInt(m)}/${parseInt(d)}/${y}`;
-    };
-    return `${f(start)} — ${f(end)}`;
-  }
-
   return (
-    <section className="space-y-4">
+    <section className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">Transactions</h2>
-          <p className="text-xs text-slate-500">
-            {transactions.length} transaction{transactions.length !== 1 ? "s" : ""} in this cycle
-          </p>
+          <span className="font-mono text-xs text-ink-soft">transactions</span>
+          <span className="font-mono text-xs text-ink-soft ml-2">
+            — {transactions.length} in this period
+          </span>
         </div>
-        <select
-          value={selectedCycle}
-          onChange={(e) => handleCycleChange(e.target.value)}
-          disabled={isPending}
-          className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200 disabled:opacity-60"
-        >
-          <option value={currentCycleKey}>
-            {fmtCycleLabel(currentStart, currentEnd)} (current)
-          </option>
-          {otherCycles.map((c) => (
-            <option key={c.key} value={c.key}>
-              {fmtCycleLabel(c.start_date, c.end_date)}
-            </option>
-          ))}
-        </select>
+        <CycleNavigator
+          periods={periods}
+          currentKey={currentCycleKey}
+          selectedKey={selectedKey}
+          isPending={isPending}
+          onChange={handlePeriodChange}
+        />
       </div>
 
       <DataTable
@@ -87,6 +63,7 @@ export function TransactionsSection({
         categories={categories}
         accounts={accounts}
         uncategorizedCount={0}
+        compact
       />
     </section>
   );

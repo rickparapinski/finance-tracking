@@ -1,24 +1,62 @@
 import { sql } from "@/lib/db";
 import { DataTable } from "./data-table";
 import { columns } from "./columns";
-import { createManualTransaction } from "./actions";
+import { TransactionsTop } from "./transactions-top";
+import { fetchCurrentCycle } from "@/lib/fetch-cycle";
+import { getCycleStartDate } from "@/lib/finance-utils";
 import Link from "next/link";
 
 export const revalidate = 0;
 
+/** Format a Date as "YYYY-MM-DD" using UTC day (consistent with DB dates). */
+function dateStr(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 export default async function TransactionsPage() {
-  const transactions = await sql`
-    SELECT t.*, json_build_object('name', a.name) AS accounts
-    FROM transactions t
-    LEFT JOIN accounts a ON t.account_id = a.id
-    ORDER BY t.date DESC
-  `;
+  const [
+    transactions,
+    accounts,
+    categories,
+    tagRows,
+    lastLogRow,
+    { start: cycleStart, end: cycleEnd },
+  ] = await Promise.all([
+    sql`
+      SELECT t.*, json_build_object('name', a.name) AS accounts
+      FROM transactions t
+      LEFT JOIN accounts a ON t.account_id = a.id
+      ORDER BY t.date DESC
+    `,
+    sql`SELECT id, name, currency FROM accounts WHERE status = 'active' ORDER BY name`,
+    sql`SELECT id, name FROM categories ORDER BY name ASC`,
+    sql`SELECT DISTINCT tag FROM transactions WHERE tag IS NOT NULL ORDER BY tag`,
+    sql`SELECT MAX(date) AS last_date FROM transactions`,
+    fetchCurrentCycle(),
+  ]);
 
-  const accounts = await sql`SELECT id, name FROM accounts`;
+  const allTags = tagRows.map((r: any) => r.tag as string);
+  const totalCount = transactions.length;
 
-  const categories = await sql`
-    SELECT id, name FROM categories ORDER BY name ASC
-  `;
+  // Days since last logged transaction — drives header voice + Nah expression
+  let daysSinceLastLog = 0;
+  if (lastLogRow[0]?.last_date) {
+    const last = new Date(lastLogRow[0].last_date as string);
+    const now  = new Date();
+    daysSinceLastLog = Math.floor(
+      (now.setHours(0, 0, 0, 0) - last.setHours(0, 0, 0, 0)) / 86_400_000,
+    );
+  }
+
+  // ── Previous cycle ─────────────────────────────────────────────────────
+  // prevCycleEnd = day before current cycle started
+  const prevCycleEnd = new Date(cycleStart);
+  prevCycleEnd.setUTCDate(prevCycleEnd.getUTCDate() - 1);
+  // prevCycleStart = getCycleStartDate for the month before prevCycleEnd's month
+  const prevCycleStart = getCycleStartDate(
+    prevCycleEnd.getUTCFullYear(),
+    prevCycleEnd.getUTCMonth() - 1,
+  );
 
   const uncategorizedCount = transactions.filter(
     (t: any) =>
@@ -26,135 +64,46 @@ export default async function TransactionsPage() {
   ).length;
 
   return (
-    <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-8">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-          Transactions
-        </h1>
-        <p className="text-sm text-slate-500">
-          Browse, filter, edit and add entries.
-        </p>
-      </header>
+    <main className="min-h-screen bg-cream p-6 max-w-6xl mx-auto space-y-4">
+      {/* ── Header + collapsible Quick Add ── */}
+      <TransactionsTop
+        accounts={accounts as any}
+        categories={categories.map((c: any) => c.name)}
+        totalCount={totalCount}
+        daysSinceLastLog={daysSinceLastLog}
+      />
 
-      <div className="rounded-[var(--radius)] bg-white p-5 shadow-[var(--shadow-softer)]">
-        <h3 className="text-sm font-semibold text-slate-900 mb-4">Quick Add</h3>
-        <form
-          action={createManualTransaction}
-          className="flex flex-wrap gap-3 items-end"
-        >
-          <div>
-            <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">
-              Date
-            </label>
-            <input
-              type="date"
-              name="date"
-              required
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-              defaultValue={new Date().toISOString().split("T")[0]}
-            />
-          </div>
-
-          <div className="flex-1 min-w-[200px]">
-            <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">
-              Description
-            </label>
-            <input
-              name="description"
-              placeholder="e.g. Groceries"
-              required
-              className="h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            />
-          </div>
-
-          <div className="w-48">
-            <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">
-              Category
-            </label>
-            <select
-              name="category"
-              defaultValue="Uncategorized"
-              className="w-full h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            >
-              <option value="Uncategorized">Uncategorized</option>
-              {(categories ?? [])
-                .map((c: any) => c.name)
-                .filter((n: string) => n && n !== "Uncategorized")
-                .map((name: string) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">
-              Account
-            </label>
-            <select
-              name="account_id"
-              required
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            >
-              {accounts.map((a: any) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-[10px] text-zinc-400 uppercase font-bold mb-1">
-              Amount
-            </label>
-            <input
-              name="amount"
-              type="number"
-              step="0.01"
-              placeholder="-0.00"
-              required
-              className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-200"
-            />
-          </div>
-
-          <button className="h-10 rounded-xl bg-emerald-500 px-5 text-sm font-medium text-white shadow-[var(--shadow-softer)] hover:opacity-90 transition">
-            Add
-          </button>
-        </form>
-      </div>
-
+      {/* ── Uncategorized nudge ── */}
       {uncategorizedCount > 0 && (
-        <div className="rounded-[var(--radius)] border border-amber-200 bg-amber-50 px-5 py-4 shadow-[var(--shadow-softer)] flex items-center justify-between gap-4">
-          <div className="text-sm text-amber-900">
-            You have <span className="font-semibold">{uncategorizedCount}</span>{" "}
-            uncategorized transactions.
-          </div>
-          <div className="flex items-center gap-2">
-            <a
-              href="#uncategorized"
-              className="h-9 rounded-xl bg-amber-600 px-4 text-xs font-medium text-white hover:opacity-90 transition grid place-items-center"
-            >
-              Assign here
-            </a>
+        <div className="border-2 border-ink/30 bg-surface rounded-md px-4 py-3 shadow-[2px_2px_0_rgba(31,31,31,0.06)] flex items-center justify-between gap-4">
+          <span className="font-sans text-[12px] text-ink/60">
+            <span className="font-semibold text-ink/80">{uncategorizedCount}</span>{" "}
+            transactions need a category.
+          </span>
+          <div className="flex items-center gap-2 shrink-0">
             <Link
               href="/categories"
-              className="h-9 rounded-xl border border-amber-300 px-4 text-xs font-medium text-amber-900 hover:bg-amber-100 transition grid place-items-center"
+              className="font-pixel text-[10px] border-2 border-ink/30 text-ink/50 px-2 py-1 rounded-md hover:border-ink/60 hover:text-ink/70 transition-none"
             >
-              Manage categories
+              manage
             </Link>
           </div>
         </div>
       )}
 
+      {/* ── Table ── */}
       {transactions && (
         <DataTable
           columns={columns}
           data={transactions as any}
           categories={categories.map((c: any) => c.name)}
           accounts={accounts.map((a: any) => ({ id: a.id, name: a.name }))}
+          allTags={allTags}
           uncategorizedCount={uncategorizedCount}
+          cycleFrom={dateStr(cycleStart)}
+          cycleTo={dateStr(cycleEnd)}
+          prevCycleFrom={dateStr(prevCycleStart)}
+          prevCycleTo={dateStr(prevCycleEnd)}
         />
       )}
     </main>

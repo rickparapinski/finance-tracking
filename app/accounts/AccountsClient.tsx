@@ -2,68 +2,214 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { archiveAccount, restoreAccount } from "./actions";
+import { X } from "lucide-react";
+import { upsertAccount, archiveAccount, restoreAccount } from "./actions";
 import { EditAccountModal, Account } from "./edit-modal";
-import { bankLogo } from "@/lib/bank-logo";
+import { useHideBalances } from "@/contexts/hide-balances";
+import { Segs } from "@/components/ui/segs";
+import { AccountIcon } from "@/components/icons/AccountIcon";
+
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+/** Fixed section order: checking → credit cards → loans */
+const SECTIONS: Array<{ types: string[]; label: string }> = [
+  { types: ["Checking", "Savings", "Investment"], label: "checking" },
+  { types: ["Credit Card"],                       label: "credit cards" },
+  { types: ["Loan"],                              label: "loans" },
+];
+
+const CLOSE_DURATION = 200; // must match animate-reveal-up in globals.css
+
+const labelCls =
+  "block text-xs font-mono text-ink-soft mb-1";
+const inputCls =
+  "h-9 w-full rounded-md border-2 border-ink bg-white px-3 text-sm text-ink " +
+  "placeholder:text-ink/30 focus:outline-none focus:border-ink/70 transition-none";
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function AccountsClient({ accounts }: { accounts: Account[] }) {
-  const [showArchived, setShowArchived] = React.useState(false);
-  const [selected, setSelected] = React.useState<Account | null>(null);
+  const [open, setOpen]               = React.useState(false);
+  const [closing, setClosing]         = React.useState(false);
+  const [isPending, startTransition]  = React.useTransition();
+  const [selected, setSelected]       = React.useState<Account | null>(null);
   const [isModalOpen, setIsModalOpen] = React.useState(false);
+  const formRef                       = React.useRef<HTMLFormElement>(null);
 
-  const visibleAccounts = React.useMemo(() => {
-    if (showArchived) return accounts;
-    return accounts.filter((a) => (a.status ?? "active") !== "archived");
-  }, [accounts, showArchived]);
+  // Only show non-archived accounts
+  const visibleAccounts = accounts.filter(
+    (a) => (a.status ?? "active") !== "archived",
+  );
 
-  const openEdit = (acc: Account) => {
-    setSelected(acc);
-    setIsModalOpen(true);
+  // ── Close animation (matches TransactionsTop pattern exactly) ──
+  const doClose = React.useCallback(() => {
+    if (closing) return;
+    setClosing(true);
+    setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+    }, CLOSE_DURATION);
+  }, [closing]);
+
+  const toggle = () => {
+    if (open) doClose();
+    else setOpen(true);
   };
 
-  const closeEdit = () => {
-    setIsModalOpen(false);
-    setSelected(null);
+  // Escape key collapses the form
+  React.useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && open) doClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, doClose]);
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    startTransition(async () => {
+      await upsertAccount(fd);
+      doClose();
+      formRef.current?.reset();
+    });
   };
+
+  const openEdit  = (acc: Account) => { setSelected(acc); setIsModalOpen(true); };
+  const closeEdit = () => { setIsModalOpen(false); setSelected(null); };
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-end">
-        <label className="flex items-center gap-2 text-xs text-slate-600 select-none">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-            className="accent-slate-700"
-          />
-          Show archived
-        </label>
+    <div className="space-y-6">
+      <EditAccountModal account={selected} isOpen={isModalOpen} onClose={closeEdit} />
+
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="font-pixel text-xl text-ink leading-none">accounts</h1>
+          <p className="font-mono text-xs text-ink-soft mt-1">
+            what you have, what you owe
+          </p>
+        </div>
+
+        {/* + new toggle — matches categories page button exactly */}
+        <button
+          onClick={toggle}
+          className={
+            open
+              ? "h-8 px-3 flex items-center gap-1 bg-surface border-2 border-ink text-ink font-mono text-[11px] rounded-md hover:bg-cream-soft transition-none"
+              : "h-8 px-3 flex items-center gap-1 bg-lime border-2 border-ink text-ink font-pixel text-[11px] rounded-md shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
+          }
+        >
+          {open ? <X size={11} className="shrink-0" /> : null}
+          {open ? "cancel" : "+ new"}
+        </button>
       </div>
 
-      {visibleAccounts.length === 0 ? (
-        <div className="rounded-xl bg-white p-12 text-center text-slate-500 text-sm shadow-[var(--shadow-softer)]">
-          No accounts found.
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {visibleAccounts.map((acc) => (
-            <AccountCard
-              key={acc.id}
-              account={acc}
-              onEdit={openEdit}
-            />
-          ))}
+      {/* ── Collapsible quick-add form (matches TransactionsTop pattern) ───── */}
+      {open && (
+        <div
+          className={`bg-surface border-2 border-ink rounded-md overflow-hidden ${
+            closing ? "animate-reveal-up" : "animate-reveal-down"
+          }`}
+        >
+          <div className="flex items-center px-4 py-2 border-b-2 border-ink/10 bg-ink/[0.02]">
+            <span className="font-mono text-xs text-ink-soft">quick add</span>
+          </div>
+
+          <form ref={formRef} onSubmit={handleSubmit} className="p-4 space-y-3">
+            <input type="hidden" name="id" value="" />
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="col-span-2">
+                <label className={labelCls}>name</label>
+                <input
+                  name="name"
+                  required
+                  placeholder="e.g. Revolut Main"
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>currency</label>
+                <select name="currency" className={inputCls}>
+                  <option value="EUR">EUR</option>
+                  <option value="BRL">BRL</option>
+                  <option value="USD">USD</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>type</label>
+                <select name="type" className={inputCls}>
+                  <option value="Checking">Checking</option>
+                  <option value="Savings">Savings</option>
+                  <option value="Credit Card">Credit Card</option>
+                  <option value="Investment">Investment</option>
+                  <option value="Loan">Loan</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-end gap-3">
+              <div className="w-40 shrink-0">
+                <label className={labelCls}>start bal.</label>
+                <input
+                  name="initial_balance"
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  className={inputCls}
+                />
+              </div>
+              <div className="ml-auto flex gap-2">
+                <button
+                  type="button"
+                  onClick={doClose}
+                  className="h-9 px-4 bg-surface border-2 border-ink text-ink font-mono text-sm rounded-md hover:bg-cream-soft transition-none"
+                >
+                  cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="h-9 px-4 bg-lime border-2 border-ink text-ink font-mono text-sm rounded-md hover:opacity-90 disabled:opacity-50 transition-none"
+                >
+                  {isPending ? "saving…" : "save account"}
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       )}
 
-      <EditAccountModal
-        account={selected}
-        isOpen={isModalOpen}
-        onClose={closeEdit}
-      />
+      {/* ── Account sections ─────────────────────────────────────────────────── */}
+      {visibleAccounts.length === 0 ? (
+        <div className="rounded-md border-2 border-ink/10 bg-surface p-12 text-center font-mono text-xs text-ink-soft">
+          no accounts yet. create one to get started.
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {SECTIONS.map(({ types, label }) => {
+            const accs = visibleAccounts.filter((a) => types.includes(a.type));
+            if (accs.length === 0) return null;
+            return (
+              <section key={label} className="space-y-3">
+                {/* Section label — matches income/expenses on categories page */}
+                <h2 className="font-mono text-xs text-ink-soft">{label}</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                  {accs.map((acc) => (
+                    <AccountCard key={acc.id} account={acc} onEdit={openEdit} />
+                  ))}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
+
+// ── Account card ──────────────────────────────────────────────────────────────
 
 function AccountCard({
   account: acc,
@@ -72,102 +218,167 @@ function AccountCard({
   account: Account;
   onEdit: (acc: Account) => void;
 }) {
-  const logo = bankLogo(acc.name);
   const isArchived = (acc.status ?? "active") === "archived";
-  const balance = acc.balance ?? Number(acc.initial_balance);
-  const currency = acc.currency || "EUR";
+  const balance    = acc.balance ?? Number(acc.initial_balance);
+  const balanceEur = acc.balance_eur;
+  const currency   = acc.currency || "EUR";
+  const isNonEur   = currency !== "EUR";
+  const { hidden } = useHideBalances();
 
-  const fmt = (n: number, cur = currency) =>
-    new Intl.NumberFormat("de-DE", {
-      style: "currency",
-      currency: cur,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(n);
+  const fmt = (n: number, cur = "EUR") =>
+    hidden
+      ? "••••••"
+      : new Intl.NumberFormat("de-DE", {
+          style: "currency",
+          currency: cur,
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }).format(n);
+
+  // ── Credit card utilization (computed here so card shell can react) ──
+  const creditLimit  = Number(acc.credit_limit ?? 0);
+  const creditUsed   = Math.abs(Math.min(balance, 0));
+  const creditPct    = creditLimit > 0
+    ? Math.min(100, Math.round((creditUsed / creditLimit) * 100))
+    : 0;
+  const creditFilled = Math.round((creditPct / 100) * 8);
+  const isOverUtilized = acc.type === "Credit Card" && creditPct >= 80;
+
+  // ── Conditional design tokens ──
+  const textPrimary   = isOverUtilized ? "text-cream-soft"    : "text-ink";
+  const textSecondary = isOverUtilized ? "text-cream-soft/60" : "text-ink-soft";
+  const borderSplit   = isOverUtilized ? "border-cream-soft/10" : "border-ink/10";
+  const hoverPrimary  = isOverUtilized ? "hover:text-cream-soft" : "hover:text-ink";
+
+  // Balance label
+  const balanceLabel =
+    acc.type === "Credit Card" ? "current balance" :
+    acc.type === "Loan"        ? "remaining debt"  :
+                                 "available balance";
+
+  // Primary display amount — prefer EUR, fall back to native
+  const displayBalance  = balanceEur != null ? balanceEur : balance;
+  const displayCurrency = balanceEur != null ? "EUR" : currency;
+  const showNativeLine  = balanceEur != null && isNonEur;
 
   return (
     <div
-      className={`rounded-xl bg-white shadow-[var(--shadow-softer)] overflow-hidden flex flex-col ${
-        isArchived ? "opacity-60" : ""
-      }`}
+      className={`self-start w-full rounded-md border-2 border-ink overflow-hidden flex flex-col ${
+        isOverUtilized ? "bg-ink" : "bg-surface"
+      } ${isArchived ? "opacity-60" : ""}`}
     >
-      {/* Color stripe */}
-      <div className="h-1" style={{ backgroundColor: acc.color || logo.bg }} />
+      <div className="p-4 flex flex-col gap-3">
 
-      <div className="p-5 flex flex-col gap-4 flex-1">
-        {/* Header row: logo + name + type */}
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 select-none"
-            style={{ backgroundColor: logo.bg, color: logo.fg }}
-          >
-            {logo.initials}
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-sm font-semibold text-slate-900 truncate">
-                {acc.name}
-              </span>
-              {isArchived && (
-                <span className="text-[10px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded shrink-0">
-                  Archived
+        {/* ── Header: type icon + name + type + over-utilized chip ── */}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            {/* Account type icon — cream on charcoal, ink on white */}
+            <AccountIcon
+              type={acc.type}
+              className={`w-6 h-6 shrink-0 ${isOverUtilized ? "text-[#F4EFE3]" : "text-ink"}`}
+            />
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className={`font-pixel text-base ${textPrimary} lowercase truncate`}>
+                  {acc.name}
                 </span>
-              )}
+                {isArchived && (
+                  <span className={`font-mono text-[10px] ${textSecondary} shrink-0`}>
+                    archived
+                  </span>
+                )}
+              </div>
             </div>
-            <span className="text-[11px] text-slate-400">{acc.type}</span>
           </div>
+
+          {/* Over-utilized chip — lime on charcoal, mirrors over-budget on categories */}
+          {isOverUtilized && (
+            <span className="font-mono text-xs text-lime shrink-0 mt-0.5">
+              over-utilized
+            </span>
+          )}
         </div>
 
-        {/* Balance */}
+        {/* ── Balance ── */}
         <div>
-          <p className="text-[11px] text-slate-400 mb-0.5">
-            {acc.type === "Credit Card" ? "Current balance" :
-             acc.type === "Loan"        ? "Remaining debt" :
-                                          "Available balance"}
+          <p className={`font-mono text-xs ${textSecondary} mb-0.5`}>
+            {balanceLabel}
           </p>
-          <p
-            className={`text-xl font-bold tabular-nums ${
-              acc.nature === "liability" ? "text-rose-600" : "text-slate-900"
-            }`}
-          >
-            {fmt(balance)}
+          <p className={`font-mono text-xl tabular-nums ${textPrimary}`}>
+            {fmt(displayBalance, displayCurrency)}
           </p>
+          {/* Non-EUR native conversion line */}
+          {showNativeLine && (
+            <p className={`font-mono text-sm tabular-nums ${textSecondary} mt-0.5`}>
+              {fmt(balance, currency)}
+            </p>
+          )}
+          {/* EUR balance not set — prompt to edit */}
+          {balanceEur == null && isNonEur && (
+            <p className={`font-mono text-xs ${textSecondary} mt-0.5`}>
+              set eur balance in edit
+            </p>
+          )}
         </div>
 
-        {/* Type-specific section */}
-        {acc.type === "Credit Card" && (
-          <CreditCardSection acc={acc} balance={balance} fmt={fmt} />
+        {/* ── Type-specific sections ── */}
+        {acc.type === "Credit Card" && creditLimit > 0 && (
+          <CreditCardSection
+            acc={acc}
+            balance={balance}
+            currency={currency}
+            fmt={fmt}
+            creditPct={creditPct}
+            creditFilled={creditFilled}
+            creditUsed={creditUsed}
+            creditLimit={creditLimit}
+            isOverUtilized={isOverUtilized}
+            textSecondary={textSecondary}
+            borderSplit={borderSplit}
+          />
         )}
+
         {acc.type === "Loan" && (
-          <LoanSection acc={acc} balance={balance} fmt={fmt} />
+          <LoanSection
+            acc={acc}
+            balance={balance}
+            currency={currency}
+            fmt={fmt}
+            textSecondary={textSecondary}
+            borderSplit={borderSplit}
+          />
         )}
       </div>
 
-      {/* Actions footer */}
-      <div className="px-5 pb-4 flex items-center justify-between gap-2 mt-auto">
+      {/* ── Footer actions ── */}
+      <div className={`px-4 pb-3 pt-2 flex items-center justify-between gap-2 border-t ${borderSplit}`}>
         <Link
           href={`/accounts/${acc.id}`}
-          className="text-xs text-slate-500 hover:text-slate-900 transition"
+          className={`font-mono text-xs ${textSecondary} ${hoverPrimary} transition-none`}
         >
-          View transactions →
+          view transactions →
         </Link>
         <div className="flex items-center gap-1">
           <button
             onClick={() => onEdit(acc)}
-            className="rounded-md px-2 py-1 text-xs font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition"
+            className={`font-mono text-xs ${textSecondary} ${hoverPrimary} px-2 py-1 rounded-md transition-none`}
           >
-            Edit
+            edit
           </button>
           {isArchived ? (
             <form action={restoreAccount.bind(null, acc.id)}>
-              <button className="rounded-md px-2 py-1 text-xs font-medium text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 transition">
-                Restore
+              <button
+                className={`font-mono text-xs ${textSecondary} ${hoverPrimary} px-2 py-1 rounded-md transition-none`}
+              >
+                restore
               </button>
             </form>
           ) : (
             <form action={archiveAccount.bind(null, acc.id)}>
-              <button className="rounded-md px-2 py-1 text-xs font-medium text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition">
-                Archive
+              <button
+                className={`font-mono text-xs ${textSecondary} ${hoverPrimary} px-2 py-1 rounded-md transition-none`}
+              >
+                archive
               </button>
             </form>
           )}
@@ -177,96 +388,123 @@ function AccountCard({
   );
 }
 
+// ── Credit card section ───────────────────────────────────────────────────────
+
 function CreditCardSection({
   acc,
   balance,
+  currency,
   fmt,
+  creditPct,
+  creditFilled,
+  creditUsed,
+  creditLimit,
+  isOverUtilized,
+  textSecondary,
+  borderSplit,
 }: {
   acc: Account;
   balance: number;
-  fmt: (n: number) => string;
+  currency: string;
+  fmt: (n: number, cur?: string) => string;
+  creditPct: number;
+  creditFilled: number;
+  creditUsed: number;
+  creditLimit: number;
+  isOverUtilized: boolean;
+  textSecondary: string;
+  borderSplit: string;
 }) {
-  const limit = Number(acc.credit_limit ?? 0);
-  const used = Math.abs(Math.min(balance, 0)); // balance is negative when owed
-  const available = limit > 0 ? Math.max(0, limit - used) : null;
-  const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
-  const interestRate = Number(acc.interest_rate ?? 0);
-  const monthlyInterest = interestRate > 0 ? used * (interestRate / 100 / 12) : 0;
-
-  if (limit <= 0 && interestRate <= 0) return null;
+  const available      = Math.max(0, creditLimit - creditUsed);
+  const interestRate   = Number(acc.interest_rate ?? 0);
+  const monthlyInterest = interestRate > 0
+    ? creditUsed * (interestRate / 100 / 12)
+    : 0;
 
   return (
-    <div className="space-y-2 border-t border-slate-100 pt-3">
-      {limit > 0 && (
-        <>
-          <div className="flex justify-between text-[11px] text-slate-500">
-            <span>Used {fmt(used)}</span>
-            <span>Limit {fmt(limit)}</span>
-          </div>
-          <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all"
-              style={{
-                width: `${pct}%`,
-                backgroundColor: pct > 80 ? "#ef4444" : pct > 50 ? "#f97316" : "#22c55e",
-              }}
-            />
-          </div>
-          <p className="text-[11px] text-slate-400">
-            {fmt(available!)} available · {pct}% used
-          </p>
-        </>
-      )}
+    <div className={`space-y-2 border-t ${borderSplit} pt-3`}>
+      {/* used / limit pair */}
+      <div className={`flex justify-between font-mono text-xs ${textSecondary}`}>
+        <span>used {fmt(creditUsed, currency)}</span>
+        <span>limit {fmt(creditLimit, currency)}</span>
+      </div>
+
+      {/* 8-segment lime bar — no gradients, no red */}
+      <Segs filled={creditFilled} dark={isOverUtilized} />
+
+      {/* available · % used */}
+      <p className={`font-mono text-xs ${textSecondary}`}>
+        {fmt(available, currency)} available · {creditPct}% used
+      </p>
+
+      {/* Interest line — gold on charcoal, ink on white */}
       {monthlyInterest > 0 && (
-        <p className="text-[11px] text-amber-600 font-medium">
-          ~{fmt(monthlyInterest)} interest this month
+        <p className={`font-mono text-xs ${isOverUtilized ? "text-[#F5C842]" : "text-ink"}`}>
+          ~{fmt(monthlyInterest, currency)} interest this month
         </p>
       )}
     </div>
   );
 }
 
+// ── Loan section ──────────────────────────────────────────────────────────────
+
 function LoanSection({
   acc,
   balance,
+  currency,
   fmt,
+  textSecondary,
+  borderSplit,
 }: {
   acc: Account;
   balance: number;
-  fmt: (n: number) => string;
+  currency: string;
+  fmt: (n: number, cur?: string) => string;
+  textSecondary: string;
+  borderSplit: string;
 }) {
-  const original = Number(acc.loan_original_amount ?? 0);
-  const remaining = Math.abs(Math.min(balance, 0));
-  const repaid = original > 0 ? Math.max(0, original - remaining) : 0;
-  const pct = original > 0 ? Math.min(100, Math.round((repaid / original) * 100)) : 0;
+  const original   = Number(acc.loan_original_amount ?? 0);
+  const remaining  = Math.abs(Math.min(balance, 0));
+  const repaid     = original > 0 ? Math.max(0, original - remaining) : 0;
+  const pct        = original > 0
+    ? Math.min(100, Math.round((repaid / original) * 100))
+    : 0;
+  const filled     = Math.round((pct / 100) * 8);
   const monthlyPayment = Number(acc.monthly_payment ?? 0);
 
+  // Est. payoff date
   let payoffLabel: string | null = null;
   if (monthlyPayment > 0 && remaining > 0) {
     const monthsLeft = Math.ceil(remaining / monthlyPayment);
-    const payoffDate = new Date();
-    payoffDate.setMonth(payoffDate.getMonth() + monthsLeft);
-    payoffLabel = payoffDate.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    const d = new Date();
+    d.setMonth(d.getMonth() + monthsLeft);
+    payoffLabel = d.toLocaleDateString("en-US", { month: "short", year: "numeric" });
   }
 
   if (original <= 0) return null;
 
   return (
-    <div className="space-y-2 border-t border-slate-100 pt-3">
-      <div className="flex justify-between text-[11px] text-slate-500">
-        <span>Repaid {fmt(repaid)}</span>
-        <span>Total {fmt(original)}</span>
+    <div className={`space-y-2 border-t ${borderSplit} pt-3`}>
+      {/* repaid / total pair */}
+      <div className={`flex justify-between font-mono text-xs ${textSecondary}`}>
+        <span>repaid {fmt(repaid, currency)}</span>
+        <span>total {fmt(original, currency)}</span>
       </div>
-      <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
-        <div
-          className="h-full rounded-full bg-emerald-500 transition-all"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <div className="flex justify-between text-[11px]">
-        <span className="text-slate-400">{pct}% repaid · {fmt(remaining)} left</span>
+
+      {/* 8-segment lime bar — positive direction (freedom progress) */}
+      <Segs filled={filled} dark={false} />
+
+      {/* % repaid · left + est. payoff */}
+      <div className="flex items-baseline justify-between gap-2">
+        <p className={`font-mono text-xs ${textSecondary}`}>
+          {pct}% repaid · {fmt(remaining, currency)} left
+        </p>
         {payoffLabel && (
-          <span className="text-slate-500 font-medium">Est. payoff {payoffLabel}</span>
+          /* est. payoff is the most important line — keep it text-ink */
+          <p className="font-mono text-xs text-ink shrink-0">
+            est. payoff {payoffLabel}
+          </p>
         )}
       </div>
     </div>

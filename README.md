@@ -1,36 +1,150 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# My Finance Tracker
 
-## Getting Started
+Personal finance tracker built with Next.js, PostgreSQL, and Docker. Tracks accounts, transactions, categories, and monthly forecasts.
 
-First, run the development server:
+## Stack
+
+- **Frontend/Backend**: Next.js (App Router, Server Actions)
+- **Database**: PostgreSQL 16 (via Docker)
+- **Styling**: Tailwind CSS
+- **Auth**: Password-gated via signed HMAC cookie (single user)
+
+---
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 20+
+- Docker Desktop running
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure environment
+
+Create `.env.local` at the root:
+
+```env
+APP_PASSWORD=your-password
+APP_SECRET=a-long-random-string
+
+DATABASE_URL=postgresql://finance:your-db-password@YOUR_LXC_IP:5432/finance
+
+TELEGRAM_BOT_TOKEN=your-token
+TELEGRAM_CHAT_ID=your-chat-id
+```
+
+> The `DATABASE_URL` points to the LXC server DB (port 5432 is exposed). Make sure you're on the local network.
+
+### 3. Run the dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Production Deployment
 
-## Learn More
+The app runs via Docker Compose on a Proxmox LXC container.
 
-To learn more about Next.js, take a look at the following resources:
+### Server environment
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+The LXC has `/opt/finance-tracker/.env` with:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```env
+POSTGRES_PASSWORD=...
+APP_PASSWORD=...
+APP_SECRET=...
+TELEGRAM_BOT_TOKEN=...
+```
 
-## Deploy on Vercel
+### Deploying a new version
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+SSH into the LXC, then:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+ssh root@YOUR_LXC_IP
+cd /opt/finance-tracker
+
+# Pull latest changes
+git pull
+
+# Rebuild and restart the app container (keeps DB running)
+docker compose build app
+docker compose up -d app
+
+# Check logs
+docker compose logs -f app
+```
+
+> The DB container (`finance-tracker-db-1`) keeps running and is unaffected by app rebuilds.
+
+### Full restart (app + DB)
+
+```bash
+docker compose down
+docker compose up -d
+```
+
+### Check container status
+
+```bash
+docker compose ps
+```
+
+### View live logs
+
+```bash
+docker compose logs -f app      # app only
+docker compose logs -f          # all services
+```
+
+---
+
+## Database
+
+### Connect to the DB directly
+
+```bash
+# From inside the LXC
+docker compose exec db psql -U finance -d finance
+
+# From local machine (DB port 5432 is exposed on the LXC)
+psql postgresql://finance:your-db-password@YOUR_LXC_IP:5432/finance
+```
+
+### Backup
+
+```bash
+# On the LXC — dumps to a file
+docker compose exec db pg_dump -U finance finance > backup_$(date +%Y%m%d).sql
+```
+
+### Restore
+
+```bash
+psql postgresql://finance:your-db-password@YOUR_LXC_IP:5432/finance < backup.sql
+```
+
+### Run a migration
+
+```bash
+# On the LXC
+docker compose exec db psql -U finance -d finance -c "ALTER TABLE ..."
+```
+
+---
+
+## Branch workflow
+
+- `main` — stable production branch (deployed on the LXC)
+- `feat/*` — feature branches, open PRs into `main`
+
+After merging a PR into `main`, deploy with the steps above.

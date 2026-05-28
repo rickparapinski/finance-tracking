@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+@theme {
+  /* ── Design system colors ─────────────────────────────── */
+  --color-ink:        #1F1F1F;   /* primary text + warning slab */
+  --color-ink-soft:   #5A5A5A;   /* secondary text */
+  --color-cream:      #F4EFE3;   /* page background */
+  --color-cream-soft: #FAF7EC;   /* text-on-ink (warning state) */
+  --color-lime:       #C5F03A;   /* hero accent */
+  --color-surface:    #FFFFFF;   /* card background */
+  --color-gold:       #F5C842;   /* celebration only */
+
+  /* Nah mascot — never use in UI chrome */
+  --color-nah-body:   #6BAA8E;
+  --color-nah-shade:  #3D7A66;
+  --color-nah-light:  #ABDABF;
+  --color-nah-cheek:  #FF8FAB;
+
+  /* ── Design system fonts ──────────────────────────────── */
+  --font-pixel:      var(--font-pixelify-sans), "Pixelify Sans", monospace;
+  --font-mono:       var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+}
+
 :root {
   /* Cards */
   --card: 0 0% 100%;
@@ -98,7 +119,50 @@
 }
 
 body {
-  background-color: rgb(var(--app-bg));
+  background-color: var(--color-cream);
   color: var(--color-foreground);
   font-family: var(--font-geist-sans), sans-serif;
+}
+
+@keyframes nah-idle {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-4px); }
+}
+.nah-idle {
+  animation: nah-idle 2.8s ease-in-out infinite;
+}
+
+/* ── Entrance animations ─────────────────────────────── */
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/** Segmented bar — each segment grows from the left */
+@keyframes seg-pop {
+  from { opacity: 0; transform: scaleX(0.15); }
+  to   { opacity: 1; transform: scaleX(1); }
+}
+.animate-slide-up {
+  animation: slide-up-fade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/**
+ * reveal-down — for panels that open *below* a trigger (e.g. Quick Add).
+ * Starts slightly above + invisible, drops to resting position.
+ * transform-origin: top keeps the scale anchor at the top edge.
+ */
+@keyframes reveal-down {
+  from { opacity: 0; transform: translateY(-8px) scaleY(0.96); }
+  to   { opacity: 1; transform: translateY(0)   scaleY(1); }
+}
+.animate-reveal-down {
+  transform-origin: top center;
+  animation: reveal-down 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes reveal-up {
+  from { opacity: 1; transform: translateY(0)   scaleY(1); }
+  to   { opacity: 0; transform: translateY(-8px) scaleY(0.96); }
+}
+.animate-reveal-up {
+  transform-origin: top center;
+  animation: reveal-up 0.2s cubic-bezier(0.4, 0, 1, 1) both;
 }
