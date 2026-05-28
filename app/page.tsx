@@ -81,6 +81,7 @@ export default async function Dashboard() {
   const debtAccounts = accountsWithBalance
     .filter((a: any) => a.balance < 0)
     .sort((a: any, b: any) => b.balance - a.balance); // closest to zero first
+  const debtAccountCount = debtAccounts.length;
   const attackNext = debtAccounts[0]
     ? { name: debtAccounts[0].name, balance: debtAccounts[0].balance }
     : null;
@@ -189,6 +190,7 @@ export default async function Dashboard() {
     recentTransactions,
     spending,
     upcomingBills,
+    debtAccountCount,
     attackNext,
     nextDueBill,
     inboxCount: Number(inboxRows[0]?.n ?? 0),

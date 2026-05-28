@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, ChevronRight, Eye, EyeOff } from "lucide-react";
+import { Bell, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 import { Nah, type NahExpression } from "@/components/Nah";
 import { useHideBalances } from "@/contexts/hide-balances";
@@ -23,6 +23,7 @@ export interface DashboardData {
   recentTransactions: { label: string; category: string; amount: number; date: string }[];
   spending: { name: string; spent: number; budget: number | null }[];
   upcomingBills: { name: string; amount: number; daysUntil: number }[];
+  debtAccountCount: number;
   attackNext: { name: string; balance: number } | null;
   nextDueBill: { name: string; amount: number; date: string } | null;
   inboxCount: number;
@@ -45,9 +46,9 @@ function streakState(days: number): { expression: NahExpression; copy: string | 
   if (days === 0) return { expression: "default",      copy: "logged today.",                    lime: true  };
   if (days === 1) return { expression: "default",      copy: "logged yesterday.",                lime: false };
   if (days === 2) return { expression: "skeptical",    copy: "haven't seen you log.",             lime: false };
-  if (days <= 4)  return { expression: "disappointed", copy: `${days} days. you're slipping.`,   lime: false };
-  if (days <= 6)  return { expression: "disappointed", copy: "we both know what's happening.",   lime: false };
-  return               { expression: "disappointed",   copy: "...nah.",                          lime: false };
+  if (days <= 6)  return { expression: "disappointed", copy: `${days} days. you're slipping.`,   lime: false };
+  if (days <= 14) return { expression: "disappointed", copy: "we both know what's happening.",   lime: false };
+  return               { expression: "disappointed",   copy: `${days} days. you're slipping.`,   lime: false };
 }
 
 // ─── Primitives ────────────────────────────────────────────────────────────────
@@ -200,22 +201,23 @@ function StreakStrip({ daysSinceLastLog, loggedDays, dayLabels }: {
 
 // ─── Debt hero card ────────────────────────────────────────────────────────────
 
-function DebtHeroCard({ liabilities, attackNext, nextDueBill, hidden }: {
+function DebtHeroCard({ liabilities, debtAccountCount, attackNext, nextDueBill, hidden }: {
   liabilities: number;
+  debtAccountCount: number;
   attackNext: { name: string; balance: number } | null;
   nextDueBill: { name: string; amount: number; date: string } | null;
   hidden: boolean;
 }) {
   return (
     <div className="bg-ink border-2 border-ink rounded-md px-4 py-3">
-      <div className="flex items-start justify-between gap-4 mb-3">
+      <div className="flex items-start justify-between gap-4 mb-2">
         <div>
           <p className="font-sans text-[10px] text-cream-soft/45 mb-0.5">total debt</p>
           <p className="font-mono text-xl text-cream-soft font-bold leading-none">
             {mask(eur(liabilities), hidden)}
           </p>
         </div>
-        <p className="font-sans text-[10px] text-cream-soft/30 mt-1">accounts: {attackNext ? "multiple" : "—"}</p>
+        <p className="font-sans text-[10px] text-cream-soft/30 mt-1">accounts: {debtAccountCount}</p>
       </div>
 
       <div className="flex items-end justify-between pt-2 border-t border-white/10">
@@ -305,7 +307,7 @@ function SpendingRow({ name, spent, budget, maxSpent }: {
 
   return (
     <div className={`flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-sm ${over ? "bg-ink" : "hover:bg-cream/40"}`}>
-      <span className={`font-sans text-sm w-28 shrink-0 truncate ${over ? "text-cream-soft" : "text-ink-soft"}`}>
+      <span className={`font-sans text-sm w-24 shrink-0 truncate ${over ? "text-cream-soft" : "text-ink-soft"}`}>
         {name}
       </span>
       <div className="flex gap-[3px] flex-1 min-w-0">
@@ -393,7 +395,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
     assets, liabilities, netWorth,
     daysSinceLastLog, loggedDays, dayLabels,
     recentTransactions, spending,
-    upcomingBills, attackNext, nextDueBill,
+    upcomingBills, debtAccountCount, attackNext, nextDueBill,
     inboxCount,
   } = data;
 
@@ -466,6 +468,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
           {liabilities > 0 && (
             <DebtHeroCard
               liabilities={liabilities}
+              debtAccountCount={debtAccountCount}
               attackNext={attackNext}
               nextDueBill={nextDueBill}
               hidden={hidden}
