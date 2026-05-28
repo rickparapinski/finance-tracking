@@ -120,8 +120,26 @@ export default async function Dashboard() {
   const budgetByName = Object.fromEntries(
     categories.map((c: any) => [c.name, Number(c.monthly_budget)])
   );
-  const spending = Object.entries(categorySpend)
-    .map(([name, spent]) => ({ name, spent, budget: budgetByName[name] ?? null }))
+
+  // All budgeted expense categories, even if unspent this cycle
+  const budgetedNames = new Set(
+    categories.filter((c: any) => c.type === "expense").map((c: any) => c.name)
+  );
+  const spendingMap: Record<string, { spent: number; budget: number | null }> = {};
+  for (const c of categories) {
+    if (c.type === "expense") {
+      spendingMap[c.name] = { spent: 0, budget: Number(c.monthly_budget) };
+    }
+  }
+  for (const [name, spent] of Object.entries(categorySpend)) {
+    if (spendingMap[name]) {
+      spendingMap[name].spent = spent;
+    } else if (!budgetedNames.has(name)) {
+      spendingMap[name] = { spent, budget: null };
+    }
+  }
+  const spending = Object.entries(spendingMap)
+    .map(([name, { spent, budget }]) => ({ name, spent, budget }))
     .sort((a, b) => b.spent - a.spent);
 
   // ── Recent transactions ───────────────────────────────────────────────────

@@ -475,16 +475,18 @@ export function DashboardClient({ data }: { data: DashboardData }) {
             />
           )}
           <UpcomingBills bills={upcomingBills} hidden={hidden} />
-          {spending.length > 0 && (
-            <Card>
-              <h2 className="font-pixel text-ink text-xs tracking-wide mb-2">spending & budget</h2>
+          <Card>
+            <h2 className="font-pixel text-ink text-xs tracking-wide mb-2">spending & budget</h2>
+            {spending.length === 0 ? (
+              <p className="font-sans text-xs text-ink-soft/50 py-4 text-center">no budgets configured yet</p>
+            ) : (
               <div className="space-y-0">
                 {spending.map((s) => (
                   <SpendingRow key={s.name} {...s} maxSpent={maxSpent} />
                 ))}
               </div>
-            </Card>
-          )}
+            )}
+          </Card>
         </div>
 
       </div>
