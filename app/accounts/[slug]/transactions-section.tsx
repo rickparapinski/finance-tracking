@@ -64,9 +64,9 @@ export function AccountTransactionsSection({
       <section className="space-y-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-900">Transactions</h2>
-            <p className="text-xs text-slate-500">
-              {transactions.length} transaction{transactions.length !== 1 ? "s" : ""} in this period
+            <h2 className="font-pixel text-sm text-ink lowercase">transactions</h2>
+            <p className="font-mono text-xs text-ink-soft">
+              {transactions.length} in this period
             </p>
           </div>
           <CycleNavigator

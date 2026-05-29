@@ -94,9 +94,9 @@ export function DataTable({
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [showOnlyUncategorized, setShowOnlyUncategorized] = useState(false);
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [activePreset, setActivePreset] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState(cycleFrom);
+  const [dateTo, setDateTo] = useState(cycleTo);
+  const [activePreset, setActivePreset] = useState<string>(cycleFrom ? "cycle" : "all");
   const [bulkTagValue, setBulkTagValue] = useState("");
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [isBulkTagLoading, setIsBulkTagLoading] = useState(false);
@@ -374,8 +374,8 @@ export function DataTable({
 
       {/* ── Card 3: table + footer summary + pagination — fills remaining viewport ── */}
       <AnimateIn delay={90}>
-      <div className={`${card} overflow-hidden flex flex-col ${compact ? "" : "min-h-[calc(100vh-260px)]"}`}>
-        <table className="w-full text-sm flex-1">
+      <div className={`${card} overflow-hidden flex flex-col`}>
+        <table className="w-full text-sm">
           <thead className="bg-ink/[0.03] border-b border-ink/10">
             {table.getHeaderGroups().map((hg) => (
               <tr key={hg.id}>
@@ -406,7 +406,7 @@ export function DataTable({
                   {row.getVisibleCells().map((cell) => (
                     <td
                       key={cell.id}
-                      className={`px-3 py-2 ${cell.column.id === "amount" ? "text-right" : ""}`}
+                      className={`px-3 py-[13px] ${cell.column.id === "amount" ? "text-right" : ""}`}
                     >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>

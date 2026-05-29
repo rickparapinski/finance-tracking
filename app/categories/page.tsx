@@ -14,9 +14,9 @@ export default async function CategoriesPage() {
   const [categories, spending] = await Promise.all([
     sql`SELECT * FROM categories ORDER BY sort_order ASC, name ASC`,
     sql`
-      SELECT category, SUM(ABS(amount_eur)) AS total
+      SELECT category, SUM(amount_eur) AS total
       FROM transactions
-      WHERE date >= ${startStr} AND date <= ${endStr} AND amount < 0
+      WHERE date >= ${startStr} AND date <= ${endStr}
       GROUP BY category
     `,
   ]);

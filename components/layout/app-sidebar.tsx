@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 import { useHideBalances } from "@/contexts/hide-balances";
+import { slugify } from "@/lib/slugify";
 import { Nah, type NahExpression } from "@/components/Nah";
 
 // ΓöÇΓöÇΓöÇ Types ΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇΓöÇ
@@ -223,7 +224,7 @@ export function AppSidebar({
                   {group.accounts.map((acc) => (
                     <li key={acc.id}>
                       <Link
-                        href={`/accounts/${acc.id}`}
+                        href={`/accounts/${slugify(acc.name)}`}
                         className="flex items-center justify-between pl-3 pr-2 py-1 hover:bg-white/5 transition-none"
                       >
                         <span className="font-sans text-[11px] text-cream-soft/50 truncate pr-1">

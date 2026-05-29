@@ -8,6 +8,7 @@ import { EditAccountModal, Account } from "./edit-modal";
 import { useHideBalances } from "@/contexts/hide-balances";
 import { Segs } from "@/components/ui/segs";
 import { AccountIcon } from "@/components/icons/AccountIcon";
+import { slugify } from "@/lib/slugify";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -353,7 +354,7 @@ function AccountCard({
       {/* ── Footer actions ── */}
       <div className={`px-4 pb-3 pt-2 flex items-center justify-between gap-2 border-t ${borderSplit}`}>
         <Link
-          href={`/accounts/${acc.id}`}
+          href={`/accounts/${slugify(acc.name)}`}
           className={`font-mono text-xs ${textSecondary} ${hoverPrimary} transition-none`}
         >
           view transactions →

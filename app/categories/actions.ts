@@ -61,9 +61,9 @@ export async function getSpendingForCycle(
   endDate: string,
 ): Promise<Record<string, number>> {
   const rows = await sql`
-    SELECT category, SUM(ABS(amount_eur)) AS total
+    SELECT category, SUM(amount_eur) AS total
     FROM transactions
-    WHERE date >= ${startDate} AND date <= ${endDate} AND amount < 0
+    WHERE date >= ${startDate} AND date <= ${endDate}
     GROUP BY category
   `;
   return Object.fromEntries(rows.map((r: any) => [r.category, Number(r.total)]));
