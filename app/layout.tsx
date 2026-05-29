@@ -1,14 +1,28 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Silkscreen, Pixelify_Sans, JetBrains_Mono, Inter } from "next/font/google";
 import { headers } from "next/headers";
 import { sql } from "@/lib/db";
 import { AppShell } from "@/components/layout/app-shell";
 import { ClientProviders } from "@/components/layout/client-providers";
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const silkscreen = Silkscreen({
+  variable: "--font-silkscreen",
+  weight: ["400", "700"],
+  subsets: ["latin"],
+});
+const pixelifySans = Pixelify_Sans({
+  variable: "--font-pixelify-sans",
+  weight: ["400", "500", "600", "700"],
+  subsets: ["latin"],
+});
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jetbrains-mono",
+  weight: ["400", "500", "700"],
+  subsets: ["latin"],
+});
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
@@ -79,7 +93,7 @@ export default async function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased text-foreground`}
+        className={`${silkscreen.variable} ${pixelifySans.variable} ${jetbrainsMono.variable} ${inter.variable} antialiased text-foreground`}
       >
         {isLoginPage ? (
           children
