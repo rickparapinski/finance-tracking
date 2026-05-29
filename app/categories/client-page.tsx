@@ -160,9 +160,10 @@ function CategoryCard({
   fmt: (n: number) => string;
 }) {
   const budget  = Number(c.monthly_budget ?? 0);
-  const pct     = budget > 0 ? Math.min(1, spent / budget) : 0;
+  const absSpent = Math.abs(spent);
+  const pct     = budget > 0 ? Math.min(1, absSpent / budget) : 0;
   const filled  = Math.round(pct * 8);           // 0–8 segments
-  const over    = budget > 0 && spent > budget;
+  const over    = budget > 0 && absSpent > budget;
 
   return (
     <a
@@ -183,7 +184,7 @@ function CategoryCard({
           </div>
           <div className="text-right shrink-0">
             <span className="font-mono text-[10px] text-cream-soft/60 block">over budget</span>
-            <span className="font-mono text-[10px] text-cream-soft/50">+{fmt(spent - budget)}</span>
+            <span className="font-mono text-[10px] text-cream-soft/50">+{fmt(absSpent - budget)}</span>
           </div>
         </div>
       ) : (
@@ -200,7 +201,7 @@ function CategoryCard({
             )}
           </div>
           <span className="font-mono text-sm text-ink tabular-nums shrink-0">
-            {fmt(spent)}
+            {fmt(absSpent)}
           </span>
         </div>
       )}
@@ -212,7 +213,7 @@ function CategoryCard({
               <Segs filled={filled} dark={false} className="flex-1 mr-3" />
               {over && (
                 <span className="font-mono text-sm text-ink tabular-nums shrink-0">
-                  {fmt(spent)}
+                  {fmt(absSpent)}
                 </span>
               )}
             </div>

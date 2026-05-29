@@ -4,6 +4,7 @@ import { sql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { addMonthsISO } from "@/lib/installment";
 import { tryAutoMatchForecast } from "@/lib/forecast-automatch";
+import { slugify } from "@/lib/slugify";
 
 export async function getSpotRate(currency: string): Promise<number | null> {
   if (currency === "EUR") return 1;
@@ -37,7 +38,7 @@ export async function createQuickTransaction(formData: FormData) {
   if (!date) throw new Error("Date is required");
   if (Number.isNaN(amount)) throw new Error("Invalid amount");
 
-  const [account] = await sql`SELECT currency FROM accounts WHERE id = ${account_id}`;
+  const [account] = await sql`SELECT name, currency FROM accounts WHERE id = ${account_id}`;
   if (!account) throw new Error("Account not found");
 
   const currency = account.currency as string;
@@ -143,6 +144,9 @@ export async function createQuickTransaction(formData: FormData) {
   revalidatePath("/transactions");
   revalidatePath("/forecast");
   revalidatePath("/");
-  revalidatePath(`/accounts/${account_id}`);
-  if (counterpart_account_id) revalidatePath(`/accounts/${counterpart_account_id}`);
+  revalidatePath(`/accounts/${slugify(account.name)}`);
+  if (counterpart_account_id) {
+    const [cp] = await sql`SELECT name FROM accounts WHERE id = ${counterpart_account_id}`;
+    if (cp) revalidatePath(`/accounts/${slugify(cp.name)}`);
+  }
 }

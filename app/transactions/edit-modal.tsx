@@ -114,7 +114,15 @@ export function EditModal({
           description: form.description,
           category: form.category,
           amount: Number(form.amount),
-          amount_eur: (transaction as any).amount_eur ?? null,
+          amount_eur: (() => {
+            const oldAmount = Number((transaction as any).amount);
+            const oldAmountEur = Number((transaction as any).amount_eur);
+            const newAmount = Number(form.amount);
+            if (newAmount === oldAmount) return oldAmountEur || null;
+            // Preserve implied exchange rate; for EUR accounts rate=1
+            const rate = oldAmount !== 0 && oldAmountEur !== 0 ? oldAmountEur / oldAmount : 1;
+            return Number((newAmount * rate).toFixed(2));
+          })(),
           date: form.date,
         },
         forecastPlan,

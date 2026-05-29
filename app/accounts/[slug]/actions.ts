@@ -2,6 +2,7 @@
 
 import { sql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { slugify } from "@/lib/slugify";
 
 export async function getAccountTransactions(
   accountId: string,
@@ -37,7 +38,7 @@ export async function createTransaction(formData: FormData) {
   const amount = Number(amountRaw);
   if (Number.isNaN(amount)) throw new Error("Invalid amount");
 
-  const [acc] = await sql`SELECT currency FROM accounts WHERE id = ${account_id}`;
+  const [acc] = await sql`SELECT name, currency FROM accounts WHERE id = ${account_id}`;
 
   if (!acc?.currency) throw new Error("Failed to load account currency");
 
@@ -63,6 +64,6 @@ export async function createTransaction(formData: FormData) {
     VALUES (${account_id}, ${dateStr}, ${description}, ${category}, ${amount}, true, ${original_currency}, ${amount_eur})
   `;
 
-  revalidatePath(`/accounts/${account_id}`);
+  revalidatePath(`/accounts/${slugify(acc.name)}`);
   revalidatePath("/transactions");
 }
