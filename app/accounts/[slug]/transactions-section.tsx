@@ -57,39 +57,25 @@ export function AccountTransactionsSection({
 
   return (
     <section className="space-y-4">
-      {/* Section header: title + cycle nav (P2-5) + inline quick-add toggle (P2-8) */}
+      {/* Section label + quick-add toggle */}
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="font-pixel text-sm text-ink lowercase">transactions</h2>
           <p className="font-mono text-xs text-ink-soft">{transactions.length} in this period</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <CycleNavigator
-            periods={periods}
-            currentKey={currentCycleKey}
-            selectedKey={selectedKey}
-            isPending={isPending}
-            onChange={handlePeriodChange}
-          />
-          {/* Quick-add toggle — same visual grammar as TransactionsTop */}
-          <button
-            onClick={() => { if (open) doClose(); else setOpen(true); }}
-            className={
-              open
-                ? "flex items-center gap-1.5 h-8 px-3 bg-surface border-2 border-ink text-ink font-mono text-[11px] shadow-[2px_2px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
-                : "flex items-center gap-1.5 h-8 px-3 bg-lime border-2 border-ink text-ink font-pixel text-[11px] shadow-[4px_4px_0_#1F1F1F] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#1F1F1F] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-none"
-            }
-          >
-            {open
-              ? <><Close className="size-[11px] shrink-0" />cancel</>
-              : <>+ add</>
-            }
-          </button>
-        </div>
+        <button
+          onClick={() => { if (open) doClose(); else setOpen(true); }}
+          className={
+            open
+              ? "flex items-center gap-1.5 h-8 px-3 bg-surface border-2 border-ink text-ink font-mono text-[11px] shadow-[2px_2px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
+              : "flex items-center gap-1.5 h-8 px-3 bg-lime border-2 border-ink text-ink font-pixel text-[11px] shadow-[4px_4px_0_#1F1F1F] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#1F1F1F] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-none"
+          }
+        >
+          {open ? <><Close className="size-[11px] shrink-0" />cancel</> : <>+ add</>}
+        </button>
       </div>
 
-      {/* Inline quick-add form — same pattern as global transactions page */}
+      {/* Inline quick-add form */}
       {open && (
         <div
           className={`bg-surface border-2 border-ink shadow-[4px_4px_0_#1F1F1F] overflow-hidden ${
@@ -110,12 +96,23 @@ export function AccountTransactionsSection({
         </div>
       )}
 
+      {/* DataTable — CycleNavigator lives inside the control strip (P2.5-1) */}
       <DataTable
         columns={columnsForAccount}
         data={transactions}
         categories={categories}
         accounts={accounts}
         uncategorizedCount={uncategorizedCount}
+        hideCyclePresets
+        cycleNav={
+          <CycleNavigator
+            periods={periods}
+            currentKey={currentCycleKey}
+            selectedKey={selectedKey}
+            isPending={isPending}
+            onChange={handlePeriodChange}
+          />
+        }
       />
     </section>
   );

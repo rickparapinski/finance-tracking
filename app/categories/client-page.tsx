@@ -90,6 +90,7 @@ export function CategoriesClientPage({
             + new
           </button>
         }
+        contextBarBoxed
         contextBar={
           <CycleNavigator
             periods={periods}

@@ -5,10 +5,13 @@ import { Nah, type NahExpression } from "@/components/Nah";
 import { Panel } from "@/components/ui/panel";
 import { Segs } from "@/components/ui/segs";
 import { PixelBtn } from "@/components/ui/pixel-btn";
-import { PageHeader } from "@/components/layout/page-header";
+import { PageHeader, iconBtnCls } from "@/components/layout/page-header";
 import { useHideBalances } from "@/contexts/hide-balances";
 import { useCountUp } from "@/hooks/use-count-up";
 import { AnimateIn } from "@/components/ui/animate-in";
+import { Eye } from "pixelarticons/react/Eye";
+import { EyeOff } from "pixelarticons/react/EyeOff";
+import { Bell } from "pixelarticons/react/Bell";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -398,7 +401,7 @@ export function OverviewClient({
   totalAssets, totalLiabilities, debtAccounts,
   freePool, salary, plannedExpenses,
 }: OverviewProps) {
-  const { hidden } = useHideBalances();
+  const { hidden, toggle } = useHideBalances();
 
   const cycleFilled = Math.ceil(((daysTotal - daysLeft) / daysTotal) * 8);
 
@@ -412,6 +415,16 @@ export function OverviewClient({
       <PageHeader
         title="overview"
         meta={`${fmtDateShort(cycleStart)} — ${fmtDate(cycleEnd)}`}
+        action={
+          <div className="flex items-center gap-1.5">
+            <button onClick={toggle} className={iconBtnCls} title={hidden ? "Show balances" : "Hide balances"}>
+              {hidden ? <EyeOff className="size-[14px]" /> : <Eye className="size-[14px]" />}
+            </button>
+            <Link href="/inbox" className={iconBtnCls} title="Inbox">
+              <Bell className="size-[14px]" />
+            </Link>
+          </div>
+        }
         contextBar={
           <div className="flex items-center gap-3">
             <span className="font-sans text-[10px] text-ink-soft">{daysLeft} days left</span>

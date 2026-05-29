@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CategoryModal } from "../category-modal";
 import { deleteCategory } from "../actions";
@@ -64,16 +63,9 @@ export function CategoryDetailClient({
         onDelete={handleDelete}
       />
 
-      {/* Breadcrumb — navigation, separate from page actions (P2-4) */}
-      <Link
-        href="/categories"
-        className="font-mono text-xs text-ink-soft hover:text-ink transition-none"
-      >
-        ← categories
-      </Link>
-
-      {/* Page header — identity (Slot A) + object actions (Slot B) */}
+      {/* Page header — back button in Slot A anchors navigation to the title row (P2.5-2) */}
       <PageHeader
+        back="/categories"
         title={category.name}
         icon={
           <CategoryIcon

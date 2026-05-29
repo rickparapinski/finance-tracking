@@ -1,48 +1,61 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { ChevronLeft } from "pixelarticons/react/ChevronLeft";
 
 /**
  * PageHeader — one shared skeleton for every page.
  *
- * Slot A (identity, left):  icon/mascot + title + one metadata line
- * Slot B (actions, right):  primary action (one button max per spec)
- * Slot C (context bar):     full-width strip below the A/B row —
- *                           cycle nav, search, filter tabs, bulk edit
- *
- * Fill only the slots your page needs. Positions never move.
+ * Slot A (identity, left):  [back btn?] + icon/mascot + title + one metadata line
+ * Slot B (actions, right):  primary action (one per spec)
+ * Slot C (context bar):     full-width strip below the A/B row
+ *                           Use contextBarBoxed to render it as a pixel-box card strip.
  *
  * Usage:
  *   <PageHeader
- *     title="transactions"
- *     icon={<Nah expression="approving" size={32} />}
- *     meta="1,234 logged."
- *     action={<Button>log a transaction</Button>}
+ *     back="/categories"
+ *     title="shopping"
+ *     icon={<CategoryIcon ... />}
+ *     meta="expense · 319,67 €"
+ *     action={<Button>edit</Button>}
  *     contextBar={<CycleNavigator ... />}
+ *     contextBarBoxed
  *   />
  */
 
+// Shared icon-button style — same visual as eye/bell/cycle-arrow chrome buttons
+export const iconBtnCls =
+  "size-8 grid place-items-center border-2 border-ink bg-surface text-ink-soft " +
+  "shadow-[2px_2px_0_#1F1F1F] hover:bg-lime hover:text-ink " +
+  "hover:shadow-[1px_1px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] " +
+  "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none " +
+  "cursor-pointer transition-none shrink-0";
+
 interface PageHeaderProps {
-  /** Page title — always font-pixel, sentence/lowercase */
   title: string;
-  /** Optional icon or mascot to the left of the title */
+  /** href for the back button — renders a square pixel icon-button left of the icon */
+  back?: string;
   icon?: React.ReactNode;
-  /** One line of metadata below the title (font-mono, ink-soft) */
   meta?: React.ReactNode;
-  /** Top-right slot — the page's single primary action */
+  /** Top-right slot — single primary action */
   action?: React.ReactNode;
-  /** Full-width strip rendered below the title row — cycle nav, search, filters */
+  /** Full-width strip below the title row */
   contextBar?: React.ReactNode;
+  /** When true, renders contextBar inside a pixel-box card strip */
+  contextBarBoxed?: boolean;
   className?: string;
 }
 
 export function PageHeader({
   title,
+  back,
   icon,
   meta,
   action,
   contextBar,
+  contextBarBoxed,
   className,
 }: PageHeaderProps) {
   return (
@@ -50,7 +63,13 @@ export function PageHeader({
       {/* Row: Slot A (identity) + Slot B (action) */}
       <div className="flex items-start justify-between gap-4">
         {/* Slot A */}
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          {/* Back button — square icon, anchored to title row */}
+          {back && (
+            <Link href={back} className={iconBtnCls} title="back">
+              <ChevronLeft className="size-[14px]" />
+            </Link>
+          )}
           {icon && <div className="shrink-0">{icon}</div>}
           <div className="min-w-0">
             <h1 className="font-pixel text-xl text-ink leading-none lowercase truncate">
@@ -65,16 +84,20 @@ export function PageHeader({
         </div>
 
         {/* Slot B */}
-        {action && (
-          <div className="shrink-0 self-center">{action}</div>
-        )}
+        {action && <div className="shrink-0 self-center">{action}</div>}
       </div>
 
-      {/* Slot C — context bar (only rendered when provided) */}
+      {/* Slot C — context bar */}
       {contextBar && (
-        <div className="flex items-center flex-wrap gap-2">
-          {contextBar}
-        </div>
+        contextBarBoxed ? (
+          <div className="bg-surface border-2 border-ink shadow-[4px_4px_0_#1F1F1F] px-4 py-2.5 flex items-center flex-wrap gap-2">
+            {contextBar}
+          </div>
+        ) : (
+          <div className="flex items-center flex-wrap gap-2">
+            {contextBar}
+          </div>
+        )
       )}
     </header>
   );

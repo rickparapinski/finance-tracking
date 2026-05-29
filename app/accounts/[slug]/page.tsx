@@ -1,5 +1,4 @@
 import { sql } from "@/lib/db";
-import Link from "next/link";
 import { fetchCurrentCycle } from "@/lib/fetch-cycle";
 import { buildPeriodList } from "@/lib/periods";
 import { slugify } from "@/lib/slugify";
@@ -111,16 +110,9 @@ export default async function AccountDetailPage(props: {
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto space-y-6">
 
-      {/* ── Breadcrumb ── */}
-      <Link
-        href="/accounts"
-        className="font-mono text-xs text-ink-soft hover:text-ink transition-none"
-      >
-        ← accounts
-      </Link>
-
-      {/* Page header — breadcrumb already above (P2-4 pattern) */}
+      {/* Page header — back button in Slot A (P2.5-2) */}
       <PageHeader
+        back="/accounts"
         title={account.name}
         icon={
           <AccountIcon
