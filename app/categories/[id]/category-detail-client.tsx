@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CategoryModal } from "../category-modal";
 import { deleteCategory } from "../actions";
 import { CategoryIcon } from "@/components/icons/CategoryIcon";
+import { PageHeader } from "@/components/layout/page-header";
 import { RulesPanel } from "./rules-panel";
 
 type Category = {
@@ -25,8 +27,8 @@ type Rule = {
 };
 
 const btnCls =
-  "h-8 px-3 bg-surface border-2 border-ink text-ink font-mono text-sm rounded-md " +
-  "hover:bg-cream-soft transition-none";
+  "h-8 px-3 bg-surface border-2 border-ink text-ink font-mono text-sm " +
+  "shadow-[2px_2px_0_#1F1F1F] hover:bg-cream-soft active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none";
 
 export function CategoryDetailClient({
   category,
@@ -36,7 +38,7 @@ export function CategoryDetailClient({
   rules: Rule[];
 }) {
   const router = useRouter();
-  const [editOpen, setEditOpen] = useState(false);
+  const [editOpen, setEditOpen]   = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
 
   const budget = Number(category.monthly_budget ?? 0);
@@ -57,62 +59,57 @@ export function CategoryDetailClient({
     <>
       <CategoryModal
         isOpen={editOpen}
-        onClose={() => {
-          setEditOpen(false);
-          router.refresh();
-        }}
+        onClose={() => { setEditOpen(false); router.refresh(); }}
         categoryToEdit={category}
         onDelete={handleDelete}
       />
 
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        {/* Left: icon + name + meta */}
-        <div className="flex items-center gap-3">
-          <CategoryIcon category={category.name} iconKey={category.color} className="w-6 h-6 text-[#1F1F1F] shrink-0" />
-          <div>
-            <h1 className="font-pixel text-2xl text-ink leading-none lowercase">
-              {category.name}
-            </h1>
-            <div className="flex flex-wrap items-center gap-2 mt-1.5">
-              <span className="font-mono text-xs text-ink-soft border border-ink rounded-md px-2 py-0.5 lowercase">
-                {category.type}
-              </span>
-              {!category.is_active && (
-                <span className="font-mono text-xs text-ink-soft border border-ink/30 rounded-md px-2 py-0.5 lowercase">
-                  inactive
-                </span>
-              )}
-              {budget > 0 && (
-                <span className="font-mono text-xs text-ink-soft">
-                  budget: {fmt(budget)}
-                </span>
-              )}
-            </div>
+      {/* Breadcrumb — navigation, separate from page actions (P2-4) */}
+      <Link
+        href="/categories"
+        className="font-mono text-xs text-ink-soft hover:text-ink transition-none"
+      >
+        ← categories
+      </Link>
+
+      {/* Page header — identity (Slot A) + object actions (Slot B) */}
+      <PageHeader
+        title={category.name}
+        icon={
+          <CategoryIcon
+            category={category.name}
+            iconKey={category.color}
+            className="w-6 h-6 text-ink shrink-0"
+          />
+        }
+        meta={
+          [
+            category.type,
+            !category.is_active ? "inactive" : null,
+            budget > 0 ? `budget: ${fmt(budget)}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        }
+        action={
+          <div className="flex items-center gap-2">
+            <button onClick={() => setEditOpen(true)} className={btnCls}>
+              edit
+            </button>
+            <button
+              onClick={() => setRulesOpen((o) => !o)}
+              className={rulesOpen
+                ? "h-8 px-3 bg-ink text-cream-soft border-2 border-ink font-mono text-sm shadow-[2px_2px_0_#5A5A5A] transition-none"
+                : btnCls
+              }
+            >
+              rules ({rules.length})
+            </button>
           </div>
-        </div>
+        }
+      />
 
-        {/* Right: buttons */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => setEditOpen(true)} className={btnCls}>
-            edit
-          </button>
-          <button
-            onClick={() => setRulesOpen((o) => !o)}
-            className={rulesOpen
-              ? "h-8 px-3 bg-ink text-cream-soft border-2 border-ink font-mono text-sm rounded-md transition-none"
-              : btnCls
-            }
-          >
-            rules ({rules.length})
-          </button>
-          <a href="/categories" className={btnCls + " flex items-center"}>
-            ← back
-          </a>
-        </div>
-      </div>
-
-      {/* ── Rules panel ── */}
+      {/* Rules panel */}
       <RulesPanel
         isOpen={rulesOpen}
         onClose={() => setRulesOpen(false)}

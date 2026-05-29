@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { Bell, Eye, EyeOff } from "lucide-react";
 import { Nah, type NahExpression } from "@/components/Nah";
 import { Panel } from "@/components/ui/panel";
 import { Segs } from "@/components/ui/segs";
 import { PixelBtn } from "@/components/ui/pixel-btn";
+import { PageHeader } from "@/components/layout/page-header";
 import { useHideBalances } from "@/contexts/hide-balances";
 import { useCountUp } from "@/hooks/use-count-up";
 import { AnimateIn } from "@/components/ui/animate-in";
@@ -398,7 +398,7 @@ export function OverviewClient({
   totalAssets, totalLiabilities, debtAccounts,
   freePool, salary, plannedExpenses,
 }: OverviewProps) {
-  const { hidden, toggle } = useHideBalances();
+  const { hidden } = useHideBalances();
 
   const cycleFilled = Math.ceil(((daysTotal - daysLeft) / daysTotal) * 8);
 
@@ -408,37 +408,17 @@ export function OverviewClient({
   return (
     <div className="min-h-screen flex flex-col gap-3 p-4" style={{ backgroundColor: pageBg }}>
 
-      {/* ── Top bar — static chrome, no entrance animation ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3 px-0.5 pt-0.5">
-        <div>
-          <h1 className="font-pixel text-ink text-2xl leading-none">overview</h1>
-          <p className="font-mono text-xs text-ink-soft mt-0.5">
-            {fmtDateShort(cycleStart)} — {fmtDate(cycleEnd)}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div>
-            <p className="font-sans text-[10px] text-ink-soft mb-1">{daysLeft} days left</p>
-            {/* Cycle progress segs — animate on load */}
-            <Segs filled={cycleFilled} animate animateDelay={0} />
+      {/* ── Page header ── */}
+      <PageHeader
+        title="overview"
+        meta={`${fmtDateShort(cycleStart)} — ${fmtDate(cycleEnd)}`}
+        contextBar={
+          <div className="flex items-center gap-3">
+            <span className="font-sans text-[10px] text-ink-soft">{daysLeft} days left</span>
+            <Segs filled={cycleFilled} animate animateDelay={0} className="w-24" />
           </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              onClick={toggle}
-              className="w-8 h-8 grid place-items-center rounded-sm text-ink-soft border-2 border-ink/15 bg-surface hover:bg-lime hover:border-lime hover:text-ink shadow-[1px_1px_0_rgba(31,31,31,0.1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px] cursor-pointer transition-none"
-              title={hidden ? "Show balances" : "Hide balances"}
-            >
-              {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
-            <Link
-              href="/inbox"
-              className="relative w-8 h-8 grid place-items-center rounded-sm text-ink-soft border-2 border-ink/15 bg-surface hover:bg-lime hover:border-lime hover:text-ink shadow-[1px_1px_0_rgba(31,31,31,0.1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px] transition-none"
-            >
-              <Bell size={14} />
-            </Link>
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── TODAY hero — first card in ── */}
       <AnimateIn>

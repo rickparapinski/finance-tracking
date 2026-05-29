@@ -7,6 +7,7 @@ import { getSpendingForCycle } from "./actions";
 import { CycleNavigator } from "@/components/cycle-navigator";
 import { CategoryIcon } from "@/components/icons/CategoryIcon";
 import { Segs } from "@/components/ui/segs";
+import { PageHeader } from "@/components/layout/page-header";
 import { type Period } from "@/lib/periods";
 
 type Category = {
@@ -78,15 +79,18 @@ export function CategoriesClientPage({
       />
 
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-pixel text-xl text-ink leading-none">categories</h1>
-          <p className="font-mono text-xs text-ink-soft mt-1">
-            budgets &amp; spending by cycle
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="categories"
+        meta="budgets & spending by cycle"
+        action={
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="h-8 px-3 flex items-center gap-1 bg-lime border-2 border-ink text-ink font-pixel text-[11px] shadow-[4px_4px_0_#1F1F1F] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#1F1F1F] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-none"
+          >
+            + new
+          </button>
+        }
+        contextBar={
           <CycleNavigator
             periods={periods}
             currentKey={currentCycleKey}
@@ -94,14 +98,8 @@ export function CategoriesClientPage({
             isPending={isPending}
             onChange={handlePeriodChange}
           />
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="h-8 px-3 flex items-center gap-1 bg-lime border-2 border-ink text-ink font-pixel text-[11px] rounded-md shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
-          >
-            + new
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* ── Income section ── */}
       {income.length > 0 && (

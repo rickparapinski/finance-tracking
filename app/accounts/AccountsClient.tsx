@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { upsertAccount, archiveAccount, restoreAccount } from "./actions";
 import { EditAccountModal, Account } from "./edit-modal";
 import { useHideBalances } from "@/contexts/hide-balances";
@@ -83,28 +84,23 @@ export default function AccountsClient({ accounts }: { accounts: Account[] }) {
     <div className="space-y-6">
       <EditAccountModal account={selected} isOpen={isModalOpen} onClose={closeEdit} />
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-pixel text-xl text-ink leading-none">accounts</h1>
-          <p className="font-mono text-xs text-ink-soft mt-1">
-            what you have, what you owe
-          </p>
-        </div>
-
-        {/* + new toggle — matches categories page button exactly */}
-        <button
-          onClick={toggle}
-          className={
-            open
-              ? "h-8 px-3 flex items-center gap-1 bg-surface border-2 border-ink text-ink font-mono text-[11px] rounded-md hover:bg-cream-soft transition-none"
-              : "h-8 px-3 flex items-center gap-1 bg-lime border-2 border-ink text-ink font-pixel text-[11px] rounded-md shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
-          }
-        >
-          {open ? <X size={11} className="shrink-0" /> : null}
-          {open ? "cancel" : "+ new"}
-        </button>
-      </div>
+      {/* ── Header ── */}
+      <PageHeader
+        title="accounts"
+        meta="what you have, what you owe"
+        action={
+          <button
+            onClick={toggle}
+            className={
+              open
+                ? "h-8 px-3 flex items-center gap-1 bg-surface border-2 border-ink text-ink font-mono text-[11px] shadow-[2px_2px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
+                : "h-8 px-3 flex items-center gap-1 bg-lime border-2 border-ink text-ink font-pixel text-[11px] shadow-[4px_4px_0_#1F1F1F] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#1F1F1F] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-none"
+            }
+          >
+            {open ? <><X size={11} className="shrink-0" />cancel</> : "+ new"}
+          </button>
+        }
+      />
 
       {/* ── Collapsible quick-add form (matches TransactionsTop pattern) ───── */}
       {open && (

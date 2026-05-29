@@ -202,7 +202,7 @@ export function DataTable({
     setBulkMode((v) => { if (v) setRowSelection({}); return !v; });
 
   // ── Card surface ──────────────────────────────────────────────────────────
-  const card = "bg-surface border-2 border-ink rounded-md shadow-[2px_2px_0_rgba(31,31,31,0.09)]";
+  const card = "bg-surface border-2 border-ink shadow-[4px_4px_0_#1F1F1F]";
 
   return (
     <div className="space-y-3">
@@ -215,40 +215,12 @@ export function DataTable({
         allTags={allTags}
       />
 
-      {/* ── Card 1+2 merged: search row + filter tab row ── */}
+      {/* ── Control strip: one unified time + search + bulk bar ── */}
       <AnimateIn>
       <div className={card}>
-        {/* Search row */}
-        <div className="px-4 py-3 flex items-center gap-3 border-b border-ink/10">
-          <input
-            placeholder="search transactions…"
-            value={globalFilter ?? ""}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            className="h-8 min-w-[180px] flex-1 border-2 border-ink/25 rounded-md bg-cream px-3 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:border-ink transition-none"
-          />
-          <DateRangePicker
-            from={dateFrom}
-            to={dateTo}
-            onChange={(from, to) => {
-              setDateFrom(from);
-              setDateTo(to);
-              setActivePreset("");
-            }}
-          />
-          <button
-            onClick={toggleBulkMode}
-            title="Toggle bulk-edit mode (select rows to batch-assign categories / tags)"
-            className={bulkMode
-              ? "h-8 bg-ink border-2 border-ink text-cream-soft font-mono text-sm rounded-md px-3 transition-none shrink-0"
-              : `${btnSec} shrink-0`
-            }
-          >
-            bulk edit
-          </button>
-        </div>
-
-        {/* Filter tab row — hairline separator from search */}
-        <div className="px-4 py-2 flex items-center flex-wrap gap-y-1">
+        {/* Row 1: time presets (the one time control) + search + bulk edit */}
+        <div className="px-4 py-2.5 flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-ink/10">
+          {/* Preset tabs */}
           {PRESETS.map((p) => (
             <button
               key={p.label}
@@ -262,11 +234,52 @@ export function DataTable({
               {p.label}
             </button>
           ))}
-          <span className="font-mono text-xs text-ink/30 ml-3">
-            {table.getRowModel().rows.length} / {visibleData.length}
+
+          {/* Custom range — only shown when a non-preset range is active */}
+          {!activePreset && (dateFrom || dateTo) && (
+            <span className="font-mono text-[10px] text-ink-soft ml-1 border-b-2 border-lime py-1.5 px-1">
+              {dateFrom || "…"} → {dateTo || "…"}
+            </span>
+          )}
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Search */}
+          <input
+            placeholder="search…"
+            value={globalFilter ?? ""}
+            onChange={(e) => setGlobalFilter(e.target.value)}
+            className="h-7 w-[160px] border-2 border-ink/25 bg-cream px-2 font-sans text-xs text-ink placeholder:text-ink/30 focus:outline-none focus:border-ink transition-none"
+          />
+
+          {/* Custom date range picker — secondary, for when presets don't cover it */}
+          <DateRangePicker
+            from={dateFrom}
+            to={dateTo}
+            onChange={(from, to) => { setDateFrom(from); setDateTo(to); setActivePreset(""); }}
+          />
+
+          {/* Bulk edit */}
+          <button
+            onClick={toggleBulkMode}
+            title="Toggle bulk-edit mode"
+            className={bulkMode
+              ? "h-7 bg-ink border-2 border-ink text-cream-soft font-mono text-[11px] px-2.5 transition-none shrink-0"
+              : `h-7 bg-surface border-2 border-ink text-ink font-mono text-[11px] px-2.5 hover:bg-cream-soft disabled:opacity-40 transition-none shrink-0`
+            }
+          >
+            bulk edit
+          </button>
+        </div>
+
+        {/* Row 2: count + uncategorized filter */}
+        <div className="px-4 py-1.5 flex items-center gap-3">
+          <span className="font-mono text-xs text-ink/30">
+            showing {table.getRowModel().rows.length} of {visibleData.length}
           </span>
           {uncategorizedCount > 0 && (
-            <label className="flex items-center gap-1.5 ml-3 font-sans text-xs text-ink/45 cursor-pointer">
+            <label className="flex items-center gap-1.5 font-sans text-xs text-ink/45 cursor-pointer">
               <input
                 type="checkbox"
                 checked={showOnlyUncategorized}
