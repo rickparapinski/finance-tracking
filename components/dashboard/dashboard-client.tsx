@@ -76,7 +76,7 @@ function Segs({ filled, total = 8, dark = false }: { filled: number; total?: num
 
 function PixelBtn({ children, href }: { children: React.ReactNode; href?: string }) {
   const cls =
-    "font-pixel text-[10px] border-2 border-ink rounded-sm px-2.5 py-1 bg-surface text-ink " +
+    "font-pixel text-[10px] border-2 border-ink px-2.5 py-1 bg-surface text-ink " +
     "shadow-[2px_2px_0_#1F1F1F] hover:bg-lime hover:border-lime " +
     "hover:shadow-[1px_1px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] " +
     "active:shadow-none active:translate-x-[2px] active:translate-y-[2px] " +
@@ -87,7 +87,7 @@ function PixelBtn({ children, href }: { children: React.ReactNode; href?: string
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`bg-surface border-2 border-ink rounded-md p-4 shadow-[2px_2px_0_rgba(31,31,31,0.09)] ${className}`}>
+    <div className={`bg-surface border-2 border-ink p-4 shadow-[4px_4px_0_#1F1F1F] ${className}`}>
       {children}
     </div>
   );
@@ -96,14 +96,16 @@ function Card({ children, className = "" }: { children: React.ReactNode; classNa
 // ─── TODAY hero ────────────────────────────────────────────────────────────────
 
 function TodayHero({ dailyAllowance, spentToday, hidden }: { dailyAllowance: number; spentToday: number; hidden: boolean }) {
-  const pct = dailyAllowance > 0 ? spentToday / dailyAllowance : 0;
-  const remaining = Math.max(0, dailyAllowance - spentToday);
-  const remainingSegs = Math.max(0, Math.ceil((1 - pct) * 8));
+  const pct       = dailyAllowance > 0 ? spentToday / dailyAllowance : 0;
+  const isOver    = pct > 1;
+  const remaining = dailyAllowance - spentToday; // negative when over
+  const displayAmount  = isOver ? Math.abs(remaining) : remaining;
+  const remainingSegs  = isOver ? 0 : Math.min(8, Math.ceil((remaining / Math.max(1, dailyAllowance)) * 8));
 
   const nahExpression: NahExpression =
-    pct > 1    ? "disappointed" :
-    pct >= 0.5 ? "skeptical"   :
-                 "default";
+    isOver      ? "disappointed" :
+    pct >= 0.5  ? "skeptical"   :
+                  "default";
 
   const nahCopy =
     nahExpression === "skeptical"    ? "easy."         :
@@ -113,30 +115,35 @@ function TodayHero({ dailyAllowance, spentToday, hidden }: { dailyAllowance: num
   const today = new Date();
   const dateLabel = today.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" });
 
+  const textPrimary   = isOver ? "text-cream-soft"    : "text-ink";
+  const textSecondary = isOver ? "text-cream-soft/55" : "text-ink-soft";
+
   return (
-    <Card className="px-6 py-4">
+    <div className={`border-2 border-ink shadow-[4px_4px_0_#1F1F1F] px-6 py-4 ${isOver ? "bg-ink" : "bg-surface"}`}>
       <div className="flex items-center gap-6">
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline justify-between gap-4 mb-3">
-            <h2 className="font-pixel text-ink text-sm tracking-widest">today</h2>
-            <span className="font-mono text-xs text-ink-soft">{dateLabel}</span>
+            <h2 className={`font-pixel text-sm tracking-widest ${textPrimary}`}>today</h2>
+            <span className={`font-mono text-xs ${textSecondary}`}>{dateLabel}</span>
           </div>
 
-          <p className="font-mono font-bold text-ink leading-none" style={{ fontSize: 64 }}>
-            {mask(eur(remaining, 2), hidden)}
+          <p className={`font-mono font-bold leading-none ${textPrimary}`} style={{ fontSize: 64 }}>
+            {mask(eur(displayAmount, 2), hidden)}
           </p>
-          <p className="font-sans text-sm text-ink-soft mt-1 mb-3">remaining today</p>
+          <p className={`font-sans text-sm mt-1 mb-3 ${textSecondary}`}>
+            {isOver ? "over today" : "remaining today"}
+          </p>
 
-          <Segs filled={remainingSegs} />
+          <Segs filled={remainingSegs} dark={isOver} />
 
           <div className="flex gap-6 mt-2">
             <div>
-              <p className="font-sans text-[10px] text-ink-soft">already spent</p>
-              <p className="font-mono text-sm text-ink mt-0.5">{mask(eur(spentToday, 2), hidden)}</p>
+              <p className={`font-sans text-[10px] ${textSecondary}`}>already spent</p>
+              <p className={`font-mono text-sm mt-0.5 ${textPrimary}`}>{mask(eur(spentToday, 2), hidden)}</p>
             </div>
             <div>
-              <p className="font-sans text-[10px] text-ink-soft">daily allowance</p>
-              <p className="font-mono text-sm text-ink mt-0.5">{mask(eur(dailyAllowance, 2), hidden)}</p>
+              <p className={`font-sans text-[10px] ${textSecondary}`}>daily allowance</p>
+              <p className={`font-mono text-sm mt-0.5 ${textPrimary}`}>{mask(eur(dailyAllowance, 2), hidden)}</p>
             </div>
           </div>
         </div>
@@ -144,11 +151,11 @@ function TodayHero({ dailyAllowance, spentToday, hidden }: { dailyAllowance: num
         <div className="flex flex-col items-center gap-1 shrink-0">
           <Nah expression={nahExpression} size={96} />
           {nahCopy && (
-            <p className="font-sans text-[10px] text-ink-soft text-center">{nahCopy}</p>
+            <p className={`font-sans text-[10px] text-center ${textSecondary}`}>{nahCopy}</p>
           )}
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
 
@@ -201,15 +208,16 @@ function StreakStrip({ daysSinceLastLog, loggedDays, dayLabels }: {
 
 // ─── Debt hero card ────────────────────────────────────────────────────────────
 
-function DebtHeroCard({ liabilities, debtAccountCount, attackNext, nextDueBill, hidden }: {
+function DebtHeroCard({ liabilities, debtAccountCount, attackNext, nextDueBill, hidden, nahExpression = "approving" }: {
   liabilities: number;
   debtAccountCount: number;
   attackNext: { name: string; balance: number } | null;
   nextDueBill: { name: string; amount: number; date: string } | null;
   hidden: boolean;
+  nahExpression?: NahExpression;
 }) {
   return (
-    <div className="bg-ink border-2 border-ink rounded-md px-4 py-3">
+    <div className="bg-ink border-2 border-ink shadow-[4px_4px_0_rgba(31,31,31,0.5)] px-4 py-3">
       <div className="flex items-start justify-between gap-4 mb-2">
         <div>
           <p className="font-sans text-[10px] text-cream-soft/45 mb-0.5">total debt</p>
@@ -241,7 +249,7 @@ function DebtHeroCard({ liabilities, debtAccountCount, attackNext, nextDueBill, 
             </div>
           )}
         </div>
-        <Nah expression="approving" size={96} />
+        <Nah expression={nahExpression} size={96} />
       </div>
     </div>
   );
@@ -306,13 +314,13 @@ function SpendingRow({ name, spent, budget, maxSpent }: {
   const filled = Math.min(8, Math.ceil(pct * 8));
 
   return (
-    <div className={`flex items-center gap-3 py-1.5 px-2 -mx-2 rounded-sm ${over ? "bg-ink" : "hover:bg-cream/40"}`}>
+    <div className={`flex items-center gap-3 py-1.5 px-2 -mx-2 ${over ? "bg-ink" : "hover:bg-cream/40"}`}>
       <span className={`font-sans text-sm w-24 shrink-0 truncate ${over ? "text-cream-soft" : "text-ink-soft"}`}>
         {name}
       </span>
       <div className="flex gap-[3px] flex-1 min-w-0">
         {Array.from({ length: 8 }).map((_, i) => (
-          <div key={i} className="h-2 flex-1 rounded-[1px]" style={{
+          <div key={i} className="h-2 flex-1" style={{
             backgroundColor: i < filled
               ? "#C5F03A"
               : over ? "rgba(250,247,236,0.1)" : "rgba(31,31,31,0.08)",
@@ -327,7 +335,12 @@ function SpendingRow({ name, spent, budget, maxSpent }: {
           </span>
         )}
       </div>
-      {over && <span className="font-pixel text-[9px] text-lime shrink-0 w-6">over</span>}
+      {over && (
+        <div className="shrink-0 flex items-center gap-1">
+          <span className="font-pixel text-[9px] text-cream-soft/50">over</span>
+          <Nah expression="disappointed" size={32} />
+        </div>
+      )}
     </div>
   );
 }
@@ -400,8 +413,17 @@ export function DashboardClient({ data }: { data: DashboardData }) {
   } = data;
 
   const cycleFilled = Math.min(8, Math.ceil(((daysTotal - daysLeft) / Math.max(1, daysTotal)) * 8));
-  const pageBg = daysSinceLastLog >= 7 ? "#F0EBDD" : "#F4EFE3";
+  const pageBg  = daysSinceLastLog >= 7 ? "#F0EBDD" : "#F4EFE3";
   const maxSpent = Math.max(...spending.map((s) => s.spent), 1);
+
+  // P3-4 — single dominant Nah expression for the screen
+  const spendPct = dailyAllowance > 0 ? spentToday / dailyAllowance : 0;
+  const dominant: NahExpression =
+    spendPct > 1         ? "disappointed" :
+    daysSinceLastLog >= 2 ? "disappointed" :
+    spendPct >= 0.5      ? "skeptical"    :
+    daysSinceLastLog >= 1 ? "skeptical"   :
+                            "approving";
 
   return (
     <div className="flex flex-col gap-3 p-3 min-h-screen" style={{ backgroundColor: pageBg }}>
@@ -472,6 +494,7 @@ export function DashboardClient({ data }: { data: DashboardData }) {
               attackNext={attackNext}
               nextDueBill={nextDueBill}
               hidden={hidden}
+              nahExpression={dominant}
             />
           )}
           <UpcomingBills bills={upcomingBills} hidden={hidden} />

@@ -29,7 +29,7 @@ export default async function CategoryDetailPage({
   const endStr = end.toISOString().slice(0, 10);
   const periods = buildPeriodList(startStr, endStr, key);
 
-  const [rules, transactions, categoriesRows, accountsRows] = await Promise.all([
+  const [rules, transactions, categoriesRows, accountsRows, spentRows] = await Promise.all([
     sql`SELECT * FROM category_rules WHERE category_id = ${categoryId} ORDER BY priority ASC, pattern ASC`,
     sql`
       SELECT t.*, json_build_object('name', a.name) AS accounts
@@ -41,13 +41,22 @@ export default async function CategoryDetailPage({
     `,
     sql`SELECT name FROM categories ORDER BY name ASC`,
     sql`SELECT id, name FROM accounts`,
+    sql`
+      SELECT COALESCE(SUM(ABS(amount_eur)), 0) AS total
+      FROM transactions
+      WHERE category = ${category.name}
+        AND date >= ${startStr} AND date <= ${endStr}
+        AND amount < 0
+    `,
   ]);
+  const cycleSpendt = Number(spentRows[0]?.total ?? 0);
 
   return (
     <main className="min-h-screen p-4 md:p-6 max-w-6xl mx-auto space-y-6">
       <CategoryDetailClient
         category={category as any}
         rules={rules as any[]}
+        cycleSpendt={cycleSpendt}
       />
 
       <TransactionsSection

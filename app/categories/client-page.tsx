@@ -9,6 +9,7 @@ import { Segs } from "@/components/ui/segs";
 import { PageHeader } from "@/components/layout/page-header";
 import { CycleSwitcher } from "@/components/ui/cycle-switcher";
 import { type Period } from "@/lib/periods";
+import { Nah } from "@/components/Nah";
 
 type Category = {
   id: string;
@@ -160,9 +161,12 @@ function CategoryCard({
             <span className="font-mono text-sm text-cream-soft lowercase truncate">{c.name}</span>
             {!c.is_active && <span className="font-mono text-[10px] text-cream-soft/50 shrink-0">inactive</span>}
           </div>
-          <div className="text-right shrink-0">
-            <span className="font-mono text-[10px] text-cream-soft/60 block">over budget</span>
-            <span className="font-mono text-[10px] text-cream-soft/50">+{fmt(absSpent - budget)}</span>
+          <div className="flex items-center gap-2 shrink-0">
+            <Nah expression="disappointed" size={40} />
+            <div className="text-right">
+              <span className="font-mono text-[10px] text-cream-soft/60 block">over budget</span>
+              <span className="font-mono text-[10px] text-cream-soft/50">+{fmt(absSpent - budget)}</span>
+            </div>
           </div>
         </div>
       ) : (

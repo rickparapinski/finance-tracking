@@ -5,6 +5,7 @@ import { deleteForecastRule } from "./actions";
 import { AddRuleModal } from "./AddRuleModal";
 import { Trash2, Settings2, Loader2, Pencil, X } from "lucide-react";
 import { formatCurrency } from "@/lib/finance-utils";
+import { NahBubble } from "@/components/ui/nah-bubble";
 
 export function ManageRulesModal({
   rules,
@@ -15,12 +16,13 @@ export function ManageRulesModal({
   categories: { id: string; name: string }[];
   accounts: { id: string; name: string }[];
 }) {
-  const [open, setOpen] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [open, setOpen]                       = useState(false);
+  const [deletingId, setDeletingId]           = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Delete this rule? Future projections will be removed.")) return;
     setDeletingId(id);
+    setConfirmDeleteId(null);
     try {
       await deleteForecastRule(id);
     } finally {
@@ -101,8 +103,8 @@ export function ManageRulesModal({
                               }
                             />
                             <button
-                              className="grid size-8 place-items-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition disabled:opacity-40"
-                              onClick={() => handleDelete(rule.id)}
+                              className="grid size-8 place-items-center rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition disabled:opacity-40"
+                              onClick={() => setConfirmDeleteId(rule.id)}
                               disabled={deletingId === rule.id}
                             >
                               {deletingId === rule.id
@@ -116,6 +118,30 @@ export function ManageRulesModal({
                   </div>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* NahBubble delete confirmation — P3-5 */}
+      {confirmDeleteId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-surface border-2 border-ink shadow-[4px_4px_0_#1F1F1F] p-6 max-w-sm w-full space-y-5">
+            <NahBubble expression="skeptical" nahSize={56}>
+              delete this rule? future projections will be removed.
+            </NahBubble>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDeleteId(null)}
+                className="h-8 px-3 bg-surface border-2 border-ink text-ink font-mono text-[11px] shadow-[4px_4px_0_#1F1F1F] hover:bg-cream-soft active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#1F1F1F] transition-none"
+              >
+                cancel
+              </button>
+              <button
+                onClick={() => handleDelete(confirmDeleteId)}
+                className="h-8 px-3 bg-ink text-cream-soft border-2 border-ink font-mono text-[11px] shadow-[4px_4px_0_rgba(31,31,31,0.4)] hover:bg-ink/80 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
+              >
+                delete
+              </button>
             </div>
           </div>
         </div>
