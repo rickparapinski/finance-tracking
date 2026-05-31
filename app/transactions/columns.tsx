@@ -6,6 +6,7 @@ import { Transaction } from "@/lib/adapters/types";
 import { deleteTransaction } from "./actions";
 import { CategoryBadge } from "@/components/ui/category-badge";
 import { PixelBadge } from "@/components/ui/pixel-badge";
+import { DeleteTransactionButton } from "@/components/ui/delete-transaction-button";
 import { X } from "lucide-react";
 
 const btnSec =
@@ -228,9 +229,7 @@ export const columns: ColumnDef<Transaction>[] = [
         >
           edit
         </button>
-        <form action={deleteTransaction.bind(null, row.original.id)}>
-          <button className={btnSec}>del</button>
-        </form>
+        <DeleteTransactionButton action={deleteTransaction.bind(null, row.original.id)} />
       </div>
     ),
   },

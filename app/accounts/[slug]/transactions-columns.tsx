@@ -5,6 +5,7 @@ import { Transaction } from "@/lib/adapters/types";
 import { deleteTransaction } from "@/app/transactions/actions";
 import { CategoryBadge } from "@/components/ui/category-badge";
 import { PixelBadge } from "@/components/ui/pixel-badge";
+import { DeleteTransactionButton } from "@/components/ui/delete-transaction-button";
 
 const btnSec =
   "h-7 bg-surface border-2 border-ink text-ink font-mono text-[10px] px-2 " +
@@ -102,9 +103,7 @@ export const columnsForAccount: ColumnDef<Transaction>[] = [
         >
           edit
         </button>
-        <form action={deleteTransaction.bind(null, (row.original as any).id)}>
-          <button className={btnSec}>del</button>
-        </form>
+        <DeleteTransactionButton action={deleteTransaction.bind(null, (row.original as any).id)} />
       </div>
     ),
   },
