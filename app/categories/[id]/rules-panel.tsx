@@ -49,7 +49,7 @@ function ApplyDialog({
           </button>
         </div>
         <div className="px-5 py-4 space-y-4">
-          <NahBubble expression="skeptical" nahSize={48}>
+          <NahBubble expression="skeptical" nahSize={48} layout="side">
             {dialog.count === 0 ? (
               <>no matches for &ldquo;{dialog.pattern}&rdquo;.</>
             ) : (

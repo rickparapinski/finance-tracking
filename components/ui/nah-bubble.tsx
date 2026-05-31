@@ -9,20 +9,26 @@ interface NahBubbleProps {
   expression?: "default" | "skeptical" | "disappointed" | "approving" | "hyped";
   className?: string;
   nahSize?: number;
+  /** "below" — Nah under bubble (default). "side" — Nah left, bubble right. */
+  layout?: "below" | "side";
 }
 
-/**
- * NahBubble — pixel art speech bubble with Nah mascot below.
- * Bubble tail points down toward Nah.
- *
- *   <NahBubble expression="skeptical">you sure?</NahBubble>
- */
 export function NahBubble({
   children,
   expression = "default",
   className,
   nahSize = 48,
+  layout = "below",
 }: NahBubbleProps) {
+  if (layout === "side") {
+    return (
+      <div className={cn("inline-flex flex-row items-center gap-3", className)}>
+        <Nah expression={expression} size={nahSize} />
+        <PixelSpeechBubble tail="left">{children}</PixelSpeechBubble>
+      </div>
+    );
+  }
+
   return (
     <div className={cn("inline-flex flex-col items-center gap-0.5", className)}>
       <PixelSpeechBubble>{children}</PixelSpeechBubble>

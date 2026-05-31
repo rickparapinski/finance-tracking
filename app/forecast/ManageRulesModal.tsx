@@ -126,7 +126,7 @@ export function ManageRulesModal({
       {confirmDeleteId && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
           <div className="bg-surface border-2 border-ink shadow-[4px_4px_0_#1F1F1F] p-6 max-w-sm w-full space-y-5">
-            <NahBubble expression="skeptical" nahSize={56}>
+            <NahBubble expression="skeptical" nahSize={48} layout="side">
               delete this rule? future projections will be removed.
             </NahBubble>
             <div className="flex justify-end gap-2">
