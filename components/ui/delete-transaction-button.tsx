@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createPortal } from "react-dom";
 import { NahBubble } from "./nah-bubble";
 
 const btnSec =
@@ -36,7 +37,7 @@ export function DeleteTransactionButton({ action }: DeleteTransactionButtonProps
         del
       </button>
 
-      {confirming && (
+      {confirming && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-surface border-2 border-ink shadow-[4px_4px_0_#1F1F1F] p-6 max-w-sm w-full space-y-5">
             <NahBubble expression="skeptical" nahSize={56}>
@@ -58,7 +59,8 @@ export function DeleteTransactionButton({ action }: DeleteTransactionButtonProps
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );
