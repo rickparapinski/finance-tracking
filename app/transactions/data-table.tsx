@@ -333,7 +333,7 @@ export function DataTable({
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="h-8 border-2 border-ink/30 rounded-md bg-white px-2 font-sans text-[11px] text-ink focus:outline-none focus:border-ink"
+            className="h-8 border-2 border-ink/30 bg-white px-2 font-sans text-[11px] text-ink focus:outline-none focus:border-ink"
           >
             <option value="">assign category…</option>
             {categories.filter((c) => c !== "Uncategorized").map((c) => (
@@ -362,7 +362,7 @@ export function DataTable({
             value={bulkTagValue}
             onChange={(e) => setBulkTagValue(e.target.value)}
             placeholder="tag name…"
-            className="h-8 w-28 border-2 border-ink/30 rounded-md bg-white px-2 font-mono text-[11px] placeholder:text-ink/25 focus:outline-none focus:border-ink"
+            className="h-8 w-28 border-2 border-ink/30 bg-white px-2 font-mono text-[11px] placeholder:text-ink/25 focus:outline-none focus:border-ink"
           />
           <button
             disabled={isBulkTagLoading || !bulkTagValue.trim()}

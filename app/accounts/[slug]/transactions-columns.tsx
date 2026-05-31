@@ -3,7 +3,14 @@
 import { ColumnDef } from "@tanstack/react-table";
 import { Transaction } from "@/lib/adapters/types";
 import { deleteTransaction } from "@/app/transactions/actions";
-import { categoryColor } from "@/lib/category-color";
+import { CategoryBadge } from "@/components/ui/category-badge";
+import { PixelBadge } from "@/components/ui/pixel-badge";
+
+const btnSec =
+  "h-7 bg-surface border-2 border-ink text-ink font-mono text-[10px] px-2 " +
+  "shadow-[3px_3px_0_#1F1F1F] hover:bg-cream-soft " +
+  "active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_#1F1F1F] " +
+  "disabled:opacity-30 disabled:pointer-events-none transition-none";
 
 function fmtDate(raw: string) {
   const d = new Date(raw.split("T")[0] + "T00:00:00");
@@ -40,12 +47,12 @@ export const columnsForAccount: ColumnDef<Transaction>[] = [
     cell: ({ row }) => {
       const { installment_index: idx, installment_total: total } = row.original as any;
       return (
-        <div className="min-w-[180px]">
+        <div className="min-w-[180px] flex items-baseline gap-1 flex-wrap">
           <span className="font-sans text-sm text-ink">{row.original.description}</span>
           {idx != null && total != null && (
-            <span className="ml-2 border border-ink/20 rounded-md px-1.5 py-0.5 font-mono text-[10px] text-ink-soft tabular-nums">
+            <PixelBadge variant="muted" className="text-[9px] tabular-nums">
               {idx}/{total}
-            </span>
+            </PixelBadge>
           )}
         </div>
       );
@@ -56,13 +63,7 @@ export const columnsForAccount: ColumnDef<Transaction>[] = [
     header: "Category",
     cell: ({ row }) => {
       const cat = row.original.category || "Uncategorized";
-      const color = cat === "Uncategorized" ? "#94a3b8" : categoryColor(cat);
-      return (
-        <div className="flex items-center gap-1.5 whitespace-nowrap">
-          <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: color }} />
-          <span className="font-sans text-xs text-ink-soft">{cat}</span>
-        </div>
-      );
+      return <CategoryBadge name={cat} />;
     },
   },
   {
@@ -97,14 +98,12 @@ export const columnsForAccount: ColumnDef<Transaction>[] = [
       <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-none">
         <button
           onClick={() => table.options.meta?.openEditModal(row.original)}
-          className="rounded-md px-2.5 py-1 font-mono text-xs text-ink-soft hover:bg-cream-soft hover:text-ink transition-none"
+          className={btnSec}
         >
           edit
         </button>
         <form action={deleteTransaction.bind(null, (row.original as any).id)}>
-          <button className="rounded-md px-2.5 py-1 font-mono text-xs text-ink-soft hover:bg-ink hover:text-cream-soft transition-none">
-            del
-          </button>
+          <button className={btnSec}>del</button>
         </form>
       </div>
     ),

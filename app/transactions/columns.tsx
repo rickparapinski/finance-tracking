@@ -5,7 +5,14 @@ import { ColumnDef, Row, Table } from "@tanstack/react-table";
 import { Transaction } from "@/lib/adapters/types";
 import { deleteTransaction } from "./actions";
 import { CategoryBadge } from "@/components/ui/category-badge";
+import { PixelBadge } from "@/components/ui/pixel-badge";
 import { X } from "lucide-react";
+
+const btnSec =
+  "h-7 bg-surface border-2 border-ink text-ink font-mono text-[10px] px-2 " +
+  "shadow-[3px_3px_0_#1F1F1F] hover:bg-cream-soft " +
+  "active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_#1F1F1F] " +
+  "disabled:opacity-30 disabled:pointer-events-none transition-none";
 
 declare module "@tanstack/react-table" {
   interface TableMeta<TData extends unknown> {
@@ -72,7 +79,7 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
             if (e.key === "Escape") setEditing(false);
           }}
           placeholder="add tag…"
-          className="h-6 w-24 rounded-md border-2 border-ink/30 bg-white px-2 font-mono text-[10px] text-ink focus:outline-none focus:border-ink/60"
+          className="h-6 w-24 border-2 border-ink/30 bg-white px-2 font-mono text-[10px] text-ink focus:outline-none focus:border-ink/60"
         />
       </>
     );
@@ -80,9 +87,9 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
 
   if (tag) {
     return (
-      <span
+      <PixelBadge
         onClick={() => { setVal(tag); setEditing(true); }}
-        className="inline-flex items-center gap-1 border-2 border-ink/25 rounded-md px-1.5 py-0.5 font-mono text-[10px] text-ink/50 cursor-pointer hover:border-ink/50 hover:text-ink/70 transition-none group"
+        className="gap-1 cursor-pointer hover:text-ink/80 transition-none group/tag"
       >
         {tag}
         <button
@@ -90,21 +97,22 @@ function TagCell({ row, table }: { row: Row<Transaction>; table: Table<Transacti
             e.stopPropagation();
             await table.options.meta?.setTag(String(row.original.id), null);
           }}
-          className="ml-0.5 opacity-0 group-hover:opacity-100 transition-none text-ink/30 hover:text-ink"
+          className="ml-0.5 opacity-0 group-hover/tag:opacity-100 transition-none text-ink/30 hover:text-ink"
         >
           <X className="w-2.5 h-2.5" />
         </button>
-      </span>
+      </PixelBadge>
     );
   }
 
   return (
-    <button
+    <PixelBadge
+      variant="muted"
       onClick={() => { setVal(""); setEditing(true); }}
-      className="inline-flex items-center border-2 border-ink/25 rounded-md px-1.5 py-0.5 font-mono text-[10px] text-ink/35 hover:border-ink/50 hover:text-ink/55 transition-none opacity-0 group-hover:opacity-100"
+      className="cursor-pointer hover:text-ink/55 transition-none opacity-0 group-hover:opacity-100"
     >
       + tag
-    </button>
+    </PixelBadge>
   );
 }
 
@@ -147,9 +155,9 @@ export const columns: ColumnDef<Transaction>[] = [
             </>
           )}
           {idx != null && total != null && (
-            <span className="border-2 border-ink/20 rounded-md px-1 py-0.5 font-mono text-[9px] text-ink/35 tabular-nums">
+            <PixelBadge variant="muted" className="text-[9px] tabular-nums">
               {idx}/{total}
-            </span>
+            </PixelBadge>
           )}
         </div>
       );
@@ -216,14 +224,12 @@ export const columns: ColumnDef<Transaction>[] = [
       <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-none">
         <button
           onClick={() => table.options.meta?.openEditModal(row.original)}
-          className="border-2 border-ink/30 rounded-md px-2 py-0.5 font-mono text-[10px] text-ink/50 hover:border-ink hover:text-ink transition-none"
+          className={btnSec}
         >
           edit
         </button>
         <form action={deleteTransaction.bind(null, row.original.id)}>
-          <button className="border-2 border-ink/20 rounded-md px-2 py-0.5 font-mono text-[10px] text-ink/35 hover:border-ink/50 hover:text-ink/60 transition-none">
-            del
-          </button>
+          <button className={btnSec}>del</button>
         </form>
       </div>
     ),
