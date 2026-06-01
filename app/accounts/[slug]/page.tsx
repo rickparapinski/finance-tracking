@@ -1,10 +1,10 @@
 import { sql } from "@/lib/db";
-import Link from "next/link";
 import { fetchCurrentCycle } from "@/lib/fetch-cycle";
 import { buildPeriodList } from "@/lib/periods";
 import { slugify } from "@/lib/slugify";
 import { Segs } from "@/components/ui/segs";
 import { AccountIcon } from "@/components/icons/AccountIcon";
+import { PageHeader } from "@/components/layout/page-header";
 import { AccountTransactionsSection } from "./transactions-section";
 
 export const revalidate = 0;
@@ -110,33 +110,21 @@ export default async function AccountDetailPage(props: {
   return (
     <main className="min-h-screen p-6 max-w-6xl mx-auto space-y-6">
 
-      {/* ── Breadcrumb ── */}
-      <Link
-        href="/accounts"
-        className="font-mono text-xs text-ink-soft hover:text-ink transition-none"
-      >
-        ← accounts
-      </Link>
-
-      {/* ── Page header ── */}
-      <div className="flex items-center gap-3">
-        <AccountIcon
-          type={account.type}
-          className={`w-7 h-7 shrink-0 ${isOverUtilized ? "text-cream-soft" : "text-ink"}`}
-        />
-        <div>
-          <h1 className="font-pixel text-xl text-ink leading-none lowercase">{account.name}</h1>
-          <p className="font-mono text-xs text-ink-soft mt-0.5">
-            {account.type.toLowerCase()} · {currency}
-          </p>
-        </div>
-        {isOverUtilized && (
-          <span className="ml-auto font-mono text-xs text-lime">over-utilized</span>
-        )}
-      </div>
+      {/* Page header — back button in Slot A (P2.5-2) */}
+      <PageHeader
+        back="/accounts"
+        title={account.name}
+        icon={
+          <AccountIcon
+            type={account.type}
+            className={`w-8 h-8 shrink-0 ${isOverUtilized ? "text-cream-soft" : "text-ink"}`}
+          />
+        }
+        meta={`${account.type.toLowerCase()} · ${currency}${isOverUtilized ? " · over-utilized" : ""}`}
+      />
 
       {/* ── Account stats card ── */}
-      <div className={`${cardBg} border-2 border-ink rounded-md overflow-hidden`}>
+      <div className={`${cardBg} border-2 border-ink shadow-[4px_4px_0_#1F1F1F] overflow-hidden`}>
         {/* Balance row */}
         <div className="px-5 py-4">
           <p className={`font-mono text-xs ${textSecond} mb-1`}>{balanceLabel}</p>

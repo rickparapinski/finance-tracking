@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 import { CategoryModal } from "../category-modal";
 import { deleteCategory } from "../actions";
 import { CategoryIcon } from "@/components/icons/CategoryIcon";
+import { PageHeader } from "@/components/layout/page-header";
 import { RulesPanel } from "./rules-panel";
+import { Nah } from "@/components/Nah";
+import { NahBubble } from "@/components/ui/nah-bubble";
 
 type Category = {
   id: string;
@@ -25,21 +28,26 @@ type Rule = {
 };
 
 const btnCls =
-  "h-8 px-3 bg-surface border-2 border-ink text-ink font-mono text-sm rounded-md " +
-  "hover:bg-cream-soft transition-none";
+  "h-8 px-3 bg-surface border-2 border-ink text-ink font-mono text-sm " +
+  "shadow-[2px_2px_0_#1F1F1F] hover:bg-cream-soft active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none";
 
 export function CategoryDetailClient({
   category,
   rules,
+  cycleSpendt = 0,
 }: {
   category: Category;
   rules: Rule[];
+  cycleSpendt?: number;
 }) {
   const router = useRouter();
-  const [editOpen, setEditOpen] = useState(false);
-  const [rulesOpen, setRulesOpen] = useState(false);
+  const [editOpen, setEditOpen]         = useState(false);
+  const [rulesOpen, setRulesOpen]       = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
 
-  const budget = Number(category.monthly_budget ?? 0);
+  const budget  = Number(category.monthly_budget ?? 0);
+  const isOver  = budget > 0 && cycleSpendt > budget;
+
   const fmt = (n: number) =>
     new Intl.NumberFormat("de-DE", {
       style: "currency",
@@ -48,7 +56,6 @@ export function CategoryDetailClient({
     }).format(n);
 
   const handleDelete = async () => {
-    if (!confirm(`Delete "${category.name}"? This cannot be undone.`)) return;
     await deleteCategory(category.id);
     router.push("/categories");
   };
@@ -57,62 +64,78 @@ export function CategoryDetailClient({
     <>
       <CategoryModal
         isOpen={editOpen}
-        onClose={() => {
-          setEditOpen(false);
-          router.refresh();
-        }}
+        onClose={() => { setEditOpen(false); router.refresh(); }}
         categoryToEdit={category}
-        onDelete={handleDelete}
+        onDelete={() => setDeleteConfirm(true)}
       />
 
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        {/* Left: icon + name + meta */}
-        <div className="flex items-center gap-3">
-          <CategoryIcon category={category.name} iconKey={category.color} className="w-6 h-6 text-[#1F1F1F] shrink-0" />
-          <div>
-            <h1 className="font-pixel text-2xl text-ink leading-none lowercase">
-              {category.name}
-            </h1>
-            <div className="flex flex-wrap items-center gap-2 mt-1.5">
-              <span className="font-mono text-xs text-ink-soft border border-ink rounded-md px-2 py-0.5 lowercase">
-                {category.type}
-              </span>
-              {!category.is_active && (
-                <span className="font-mono text-xs text-ink-soft border border-ink/30 rounded-md px-2 py-0.5 lowercase">
-                  inactive
-                </span>
-              )}
-              {budget > 0 && (
-                <span className="font-mono text-xs text-ink-soft">
-                  budget: {fmt(budget)}
-                </span>
-              )}
+      {/* NahBubble delete confirmation — P3-5 */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-surface border-2 border-ink shadow-[4px_4px_0_#1F1F1F] p-6 max-w-sm w-full space-y-5">
+            <NahBubble expression="skeptical" nahSize={48} layout="side">
+              delete &ldquo;{category.name}&rdquo;?<br />this can&rsquo;t be undone.
+            </NahBubble>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteConfirm(false)}
+                className={btnCls}
+              >
+                cancel
+              </button>
+              <button
+                onClick={async () => { setDeleteConfirm(false); await handleDelete(); }}
+                className="h-8 px-3 bg-ink text-cream-soft border-2 border-ink font-mono text-sm shadow-[4px_4px_0_rgba(31,31,31,0.4)] hover:bg-ink/80 active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
+              >
+                delete
+              </button>
             </div>
           </div>
         </div>
+      )}
 
-        {/* Right: buttons */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button onClick={() => setEditOpen(true)} className={btnCls}>
-            edit
-          </button>
-          <button
-            onClick={() => setRulesOpen((o) => !o)}
-            className={rulesOpen
-              ? "h-8 px-3 bg-ink text-cream-soft border-2 border-ink font-mono text-sm rounded-md transition-none"
-              : btnCls
-            }
-          >
-            rules ({rules.length})
-          </button>
-          <a href="/categories" className={btnCls + " flex items-center"}>
-            ← back
-          </a>
-        </div>
-      </div>
+      {/* Page header — back button in Slot A anchors navigation to the title row (P2.5-2) */}
+      <PageHeader
+        back="/categories"
+        title={category.name}
+        icon={
+          isOver
+            ? <Nah expression="disappointed" size={28} />
+            : <CategoryIcon
+                category={category.name}
+                iconKey={category.color}
+                className="w-6 h-6 text-ink shrink-0"
+              />
+        }
+        meta={
+          [
+            category.type,
+            !category.is_active ? "inactive" : null,
+            budget > 0 ? `budget: ${fmt(budget)}` : null,
+            isOver ? `over by ${fmt(cycleSpendt - budget)}` : null,
+          ]
+            .filter(Boolean)
+            .join(" · ")
+        }
+        action={
+          <div className="flex items-center gap-2">
+            <button onClick={() => setEditOpen(true)} className={btnCls}>
+              edit
+            </button>
+            <button
+              onClick={() => setRulesOpen((o) => !o)}
+              className={rulesOpen
+                ? "h-8 px-3 bg-ink text-cream-soft border-2 border-ink font-mono text-sm shadow-[2px_2px_0_#5A5A5A] transition-none"
+                : btnCls
+              }
+            >
+              rules ({rules.length})
+            </button>
+          </div>
+        }
+      />
 
-      {/* ── Rules panel ── */}
+      {/* Rules panel */}
       <RulesPanel
         isOpen={rulesOpen}
         onClose={() => setRulesOpen(false)}

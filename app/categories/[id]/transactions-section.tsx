@@ -24,8 +24,8 @@ export function TransactionsSection({
   accounts: { id: string; name: string }[];
 }) {
   const [transactions, setTransactions] = useState(initialTransactions);
-  const [selectedKey, setSelectedKey] = useState(currentCycleKey);
-  const [isPending, startTransition] = useTransition();
+  const [selectedKey, setSelectedKey]   = useState(currentCycleKey);
+  const [isPending, startTransition]    = useTransition();
 
   const handlePeriodChange = (period: Period) => {
     setSelectedKey(period.key);
@@ -41,21 +41,9 @@ export function TransactionsSection({
 
   return (
     <section className="space-y-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <span className="font-mono text-xs text-ink-soft">transactions</span>
-          <span className="font-mono text-xs text-ink-soft ml-2">
-            — {transactions.length} in this period
-          </span>
-        </div>
-        <CycleNavigator
-          periods={periods}
-          currentKey={currentCycleKey}
-          selectedKey={selectedKey}
-          isPending={isPending}
-          onChange={handlePeriodChange}
-        />
-      </div>
+      <span className="font-mono text-xs text-ink-soft">
+        transactions — {transactions.length} in this period
+      </span>
 
       <DataTable
         columns={columns}
@@ -64,6 +52,16 @@ export function TransactionsSection({
         accounts={accounts}
         uncategorizedCount={0}
         compact
+        hideCyclePresets
+        cycleNav={
+          <CycleNavigator
+            periods={periods}
+            currentKey={currentCycleKey}
+            selectedKey={selectedKey}
+            isPending={isPending}
+            onChange={handlePeriodChange}
+          />
+        }
       />
     </section>
   );

@@ -1,20 +1,17 @@
 import { sql } from "@/lib/db";
-import { ForecastTable } from "./ForecastTable";
+import { ForecastTable, type MonthRow, type CommittedItem, type BudgetItem } from "./ForecastTable";
 import { UnmatchedList } from "./UnmatchedList";
 import { AddRuleModal } from "./AddRuleModal";
 import { ManageRulesModal } from "./ManageRulesModal";
 import { generateForecastInstances, clearAllRules } from "./actions";
-import { getCycleKeyForDate } from "@/lib/finance-utils";
+import { getCycleKeyForDate, formatCurrency } from "@/lib/finance-utils";
 
 export const revalidate = 0;
 
-function getSmartCycleKey(dateObj: Date, customCycles: any[]) {
+function smartCycleKey(dateObj: Date, customCycles: any[]) {
   const dateStr = dateObj.toISOString().split("T")[0];
-  const match = customCycles?.find((c) => {
-    return dateStr >= c.start_date && dateStr <= c.end_date;
-  });
-  if (match) return match.key;
-  return getCycleKeyForDate(dateObj);
+  const match = customCycles?.find((c) => dateStr >= c.start_date && dateStr <= c.end_date);
+  return match ? match.key : getCycleKeyForDate(dateObj);
 }
 
 export default async function ForecastPage({
@@ -26,9 +23,8 @@ export default async function ForecastPage({
   const year = Number(resolvedParams?.year ?? new Date().getFullYear());
 
   const fetchStart = new Date(Date.UTC(year - 1, 10, 1)).toISOString().split("T")[0];
-  const fetchEnd = new Date(Date.UTC(year + 1, 2, 1)).toISOString().split("T")[0];
-
-  const yearStart = `${year}-01-01`;
+  const fetchEnd   = new Date(Date.UTC(year + 1,  2, 1)).toISOString().split("T")[0];
+  const yearStart  = `${year}-01-01`;
 
   const [accounts, txInRange, rules, dbCycles, categories, txBeforeYear] = await Promise.all([
     sql`SELECT id, name, currency, initial_balance, initial_balance_eur, nature FROM accounts`,
@@ -43,14 +39,13 @@ export default async function ForecastPage({
     sql`SELECT id, name FROM categories ORDER BY name`,
     sql`
       SELECT account_id, COALESCE(amount_eur, amount) AS eur_amount
-      FROM transactions
-      WHERE date < ${yearStart}
+      FROM transactions WHERE date < ${yearStart}
     `,
   ]);
 
   await generateForecastInstances({ startDate: yearStart, horizonMonths: 12 });
 
-  // Opening balance = liquid (asset) accounts only
+  // ── Opening balance (asset accounts only) ──────────────────────────
   const assetAccounts = accounts.filter((a: any) => a.nature === "asset");
   const assetIds = new Set(assetAccounts.map((a: any) => String(a.id)));
 
@@ -67,226 +62,289 @@ export default async function ForecastPage({
     return sum + eurBase + eurActivity;
   }, 0);
 
-  // Monthly actuals: sum of asset account transactions per month (direct, not via forecast_instances)
+  // ── Monthly actuals: real asset-account cash flows ─────────────────
   const monthlyActuals: Record<string, number> = {};
   for (const tx of txInRange) {
     if (!assetIds.has(String(tx.account_id))) continue;
-    const k = getSmartCycleKey(new Date(tx.date), dbCycles);
+    const k = smartCycleKey(new Date(tx.date), dbCycles);
     if (!k.startsWith(`${year}-`)) continue;
-    monthlyActuals[k] = (monthlyActuals[k] || 0) + Number(tx.amount_eur ?? tx.amount);
+    monthlyActuals[k] = (monthlyActuals[k] ?? 0) + Number(tx.amount_eur ?? tx.amount);
   }
 
+  // ── Budget spending per category per month (asset accounts only) ───
+  // Using asset-account transactions keeps this consistent with monthlyActuals.
+  const catSpendByMonth: Record<string, Record<string, number>> = {};
+  for (const tx of txInRange) {
+    if (!assetIds.has(String(tx.account_id))) continue;
+    if (!tx.category || tx.category === "Uncategorized" || tx.category === "Transfer") continue;
+    const k = smartCycleKey(new Date(tx.date), dbCycles);
+    if (!k.startsWith(`${year}-`)) continue;
+    if (!catSpendByMonth[k]) catSpendByMonth[k] = {};
+    catSpendByMonth[k][tx.category] = (catSpendByMonth[k][tx.category] ?? 0) + Number(tx.amount_eur ?? tx.amount);
+  }
+
+  // ── Fetch forecast instances (joined with rules) ───────────────────
   const fcInRange = await sql`
-    SELECT * FROM forecast_instances
-    WHERE date >= ${fetchStart} AND date < ${fetchEnd}
+    SELECT
+      fi.id, fi.rule_id, fi.date, fi.amount, fi.override_amount,
+      fi.status, fi.transaction_id, fi.note,
+      fr.type  AS rule_type,
+      fr.name  AS rule_name,
+      fr.category AS rule_category
+    FROM forecast_instances fi
+    LEFT JOIN forecast_rules fr ON fr.id = fi.rule_id
+    WHERE fi.date >= ${fetchStart} AND fi.date < ${fetchEnd}
   `;
 
-  const ruleById = new Map<string, any>();
-  rules.forEach((r) => ruleById.set(r.id, r));
-
-  const categoryActuals = new Map<string, number>();
-  const getCatKey = (cycleKey: string, category: string) => `${cycleKey}|${category}`;
-
-  txInRange.forEach((tx) => {
-    if (tx.category && tx.category !== "Uncategorized") {
-      const cycleKey = getSmartCycleKey(new Date(tx.date), dbCycles);
-      const key = getCatKey(cycleKey, tx.category);
-      const val = Number(tx.amount_eur ?? tx.amount);
-      categoryActuals.set(key, (categoryActuals.get(key) || 0) + val);
-    }
-  });
-
-  const relevantForecastInstances = fcInRange.filter((f) => f.status !== "skipped");
-
+  // ── Unmatched transactions (for reconciliation panel) ─────────────
   const linkedTxIds = new Set(
-    fcInRange.filter((f) => f.transaction_id).map((f) => f.transaction_id),
+    fcInRange.filter((f: any) => f.transaction_id).map((f: any) => f.transaction_id),
   );
-
-  // Only recurring/one_off rules need manual linking — budget rules aggregate automatically
   const linkableCategories = new Set(
-    rules.filter((r: any) => r.type !== "budget").map((r: any) => r.category).filter(Boolean)
+    rules.filter((r: any) => r.type !== "budget").map((r: any) => r.category).filter(Boolean),
   );
-
   const unmatchedTx = txInRange.filter((tx: any) => {
     if (linkedTxIds.has(tx.id)) return false;
     if (tx.category === "Transfer") return false;
     return linkableCategories.has(tx.category);
   });
+  const enrichedProjected = fcInRange
+    .filter((f: any) => f.status === "projected" && f.rule_type !== "budget")
+    .map((f: any) => ({
+      id: f.id,
+      date: f.date,
+      amount: Number(f.override_amount ?? f.amount),
+      ruleName: f.rule_name,
+      category: f.rule_category,
+    }));
 
-  const enrichedProjected = relevantForecastInstances
-    .filter((f) => f.status === "projected")
-    .map((f) => {
-      const rule = ruleById.get(f.rule_id);
-      return {
+  // ── Build per-month committed + budget detail ──────────────────────
+  const committedByMonth: Record<string, CommittedItem[]> = {};
+  const budgetInstByMonth: Record<
+    string,
+    { ruleId: string; ruleName: string; category: string; cap: number }[]
+  > = {};
+
+  for (const f of fcInRange) {
+    if (f.status === "skipped") continue;
+    const k = smartCycleKey(new Date(f.date), dbCycles);
+    if (!k.startsWith(`${year}-`)) continue;
+
+    if (f.rule_type === "budget") {
+      if (!budgetInstByMonth[k]) budgetInstByMonth[k] = [];
+      budgetInstByMonth[k].push({
+        ruleId: f.rule_id,
+        ruleName: f.rule_name ?? "(budget)",
+        category: f.rule_category ?? "",
+        cap: Number(f.override_amount ?? f.amount),
+      });
+    } else {
+      if (!committedByMonth[k]) committedByMonth[k] = [];
+      committedByMonth[k].push({
         id: f.id,
         date: f.date,
         amount: Number(f.override_amount ?? f.amount),
-        ruleName: rule?.name,
-        category: rule?.category,
-      };
-    });
-
-  const detailsByMonth: Record<string, any[]> = {};
-  const processedCategoriesPerMonth = new Set<string>();
-
-  for (const f of relevantForecastInstances) {
-    const k = getSmartCycleKey(new Date(f.date), dbCycles);
-    if (!k.startsWith(`${year}-`)) continue;
-    if (!detailsByMonth[k]) detailsByMonth[k] = [];
-
-    const rule = ruleById.get(f.rule_id);
-    const category = rule?.category;
-    let amount = Number(f.override_amount ?? f.amount);
-
-    const isBudget = rule?.type === "budget" && category;
-
-    if (isBudget) {
-      const catKey = getCatKey(k, category);
-      const budgetRealized = categoryActuals.get(catKey) || 0;
-      processedCategoriesPerMonth.add(catKey);
-
-      const remaining = amount - budgetRealized;
-      amount = amount < 0 ? Math.min(0, remaining) : Math.max(0, remaining);
-
-      if (budgetRealized !== 0) {
-        detailsByMonth[k].push({
-          id: `${f.id}-actual`,
-          date: f.date,
-          amount: budgetRealized,
-          status: "realized",
-          ruleId: f.rule_id,
-          ruleType: "budget",
-          ruleName: rule?.name,
-          category,
-          isAggregated: true,
-        });
-      }
-      if (amount !== 0) {
-        detailsByMonth[k].push({
-          id: f.id,
-          date: f.date,
-          amount,
-          status: "projected",
-          ruleId: f.rule_id,
-          ruleType: "budget",
-          ruleName: rule?.name,
-          category,
-        });
-      }
-    } else {
-      detailsByMonth[k].push({
-        id: f.id,
-        date: f.date,
-        amount,
         status: f.status,
         ruleId: f.rule_id,
-        ruleType: rule?.type,
-        ruleName: rule?.name,
-        category,
+        ruleName: f.rule_name ?? "(rule)",
+        category: f.rule_category ?? undefined,
         note: f.note,
         transaction_id: f.transaction_id,
-      });
+      } as CommittedItem);
     }
   }
 
-  for (const [key, amount] of categoryActuals.entries()) {
-    if (processedCategoriesPerMonth.has(key)) continue;
-    const [cycleKey, catName] = key.split("|");
-    if (!cycleKey.startsWith(`${year}-`)) continue;
-    if (!detailsByMonth[cycleKey]) detailsByMonth[cycleKey] = [];
-
-    detailsByMonth[cycleKey].push({
-      id: `implied-${key}`,
-      date: `${cycleKey}-01`,
-      amount,
-      status: "realized",
-      ruleType: "budget",
-      ruleName: catName,
-      category: catName,
-      isAggregated: true,
-    });
-  }
-
+  // ── Build month rows with two running balance chains ───────────────
   const today = new Date();
-  const months = Array.from({ length: 12 }, (_, i) => i);
-  const tableRows = months.map((monthIndex) => {
-    const cycleMonthStr = String(monthIndex + 1).padStart(2, "0");
-    const key = `${year}-${cycleMonthStr}`;
-    const label = new Date(year, monthIndex).toLocaleString("en-US", {
-      month: "short",
-      year: "numeric",
+  let floorBalance = openingBalance;
+  let ceilBalance  = openingBalance;
+
+  const tableRows: MonthRow[] = Array.from({ length: 12 }, (_, i) => {
+    const monthIndex     = i;
+    const monthStr       = String(monthIndex + 1).padStart(2, "0");
+    const key            = `${year}-${monthStr}`;
+    const label          = new Date(year, monthIndex).toLocaleString("en-US", { month: "short", year: "numeric" });
+    const monthEnd       = new Date(year, monthIndex + 1, 0);
+    const monthStart     = new Date(year, monthIndex, 1);
+    const isPast         = monthEnd < today;
+    const isCurrent      = monthStart <= today && today <= monthEnd;
+
+    const floorOpening = floorBalance;
+    const ceilOpening  = ceilBalance;
+
+    const actual = monthlyActuals[key] ?? 0;
+
+    // Committed projected: non-budget instances still in "projected" state
+    const cItems = committedByMonth[key] ?? [];
+    const committedProjected = cItems
+      .filter((i) => i.status === "projected")
+      .reduce((s, i) => s + i.amount, 0);
+
+    // Budget detail: merge caps with actual spending
+    const bInsts = budgetInstByMonth[key] ?? [];
+    const catSpend = catSpendByMonth[key] ?? {};
+    const budgetItems: BudgetItem[] = bInsts.map((b) => {
+      const spent     = catSpend[b.category] ?? 0;
+      const remaining = b.cap - spent;
+      return {
+        category: b.category,
+        ruleName: b.ruleName,
+        cap: b.cap,
+        spent,
+        remaining,
+        ruleId: b.ruleId,
+      };
     });
 
-    // For fully past months, only count realized transactions (not projections)
-    const monthEnd = new Date(year, monthIndex + 1, 0);
-    const isPastMonth = monthEnd < today;
+    const budgetCap       = budgetItems.reduce((s, b) => s + b.cap, 0);
+    const budgetSpent     = budgetItems.reduce((s, b) => s + b.spent, 0);
+    const budgetRemaining = budgetCap - budgetSpent;
 
-    const items = detailsByMonth[key] ?? [];
-    const actual = monthlyActuals[key] ?? 0;
-    const projected = isPastMonth ? 0 : items.filter((i) => i.status === "projected").reduce((sum, i) => sum + i.amount, 0);
-    const net = actual + projected;
+    // Floor: opening + actual cash flows + still-projected committed items
+    // Ceil:  floor + remaining budget capacity (worst-case variable spending)
+    let floorClosing: number;
+    let ceilClosing: number;
 
-    return { key, label, opening: 0, actual, projected, net, closing: net };
+    if (isPast) {
+      floorClosing = floorOpening + actual;
+      ceilClosing  = floorClosing; // no uncertainty in the past
+    } else {
+      floorClosing = floorOpening + actual + committedProjected;
+      ceilClosing  = ceilOpening  + actual + committedProjected + budgetRemaining;
+    }
+
+    floorBalance = floorClosing;
+    ceilBalance  = ceilClosing;
+
+    return {
+      key, label, isPast, isCurrent,
+      floorOpening, ceilOpening,
+      floorClosing, ceilClosing,
+      actual, committedProjected,
+      budgetCap, budgetSpent, budgetRemaining,
+      committedItems: cItems,
+      budgetItems,
+    };
   });
 
-  let runningBalance = openingBalance;
-  const rowsWithBalance = tableRows.map((row) => {
-    const opening = runningBalance;
-    const closing = opening + row.net;
-    runningBalance = closing;
-    return { ...row, opening, closing };
-  });
+  const yearEndFloor = tableRows[11].floorClosing;
+  const yearEndCeil  = tableRows[11].ceilClosing;
+  const totalBudgetCap = tableRows.reduce((s, r) => s + r.budgetCap, 0);
 
   return (
-    <main className="min-h-screen p-8 max-w-6xl mx-auto space-y-8">
-      <div className="flex items-end justify-between gap-4">
+    <main className="min-h-screen bg-cream p-6 max-w-5xl mx-auto space-y-5">
+
+      {/* ── Page header ───────────────────────────────────────────── */}
+      <div className="flex items-end justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Forecast</h1>
-          <p className="text-sm text-slate-600">
-            Cash Flow View (Assets + Projected Liabilities).
+          <h1 className="font-pixel text-2xl text-ink">forecast.</h1>
+          <p className="font-sans text-sm text-ink-soft mt-0.5">
+            committed flows + budget range · {year}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <ManageRulesModal rules={rules as any} categories={categories as any} accounts={accounts as any} />
-          <AddRuleModal
+
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Year nav */}
+          <a
+            href={`/forecast?year=${year - 1}`}
+            className="pixel-box bg-surface h-8 px-3 font-mono text-xs text-ink flex items-center
+                       hover:bg-cream transition-none
+                       active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#1F1F1F]"
+          >
+            ← {year - 1}
+          </a>
+          <span className="pixel-box bg-ink h-8 px-3 font-mono text-xs text-cream-soft flex items-center">
+            {year}
+          </span>
+          <a
+            href={`/forecast?year=${year + 1}`}
+            className="pixel-box bg-surface h-8 px-3 font-mono text-xs text-ink flex items-center
+                       hover:bg-cream transition-none
+                       active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#1F1F1F]"
+          >
+            {year + 1} →
+          </a>
+
+          <div className="w-px h-5 bg-ink/20 mx-1" />
+
+          {/* Actions */}
+          <ManageRulesModal
+            rules={rules as any}
             categories={categories as any}
             accounts={accounts as any}
           />
+          <AddRuleModal categories={categories as any} accounts={accounts as any} />
+
           {rules.length > 0 && (
             <form action={clearAllRules}>
               <button
                 type="submit"
-                className="rounded-xl border border-rose-200 bg-white px-3 py-2 text-sm text-rose-600 hover:bg-rose-50 transition"
+                className="pixel-box bg-surface h-8 px-3 font-mono text-xs text-ink
+                           hover:bg-cream transition-none
+                           active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#1F1F1F]"
               >
-                Clear all rules
+                clear all
               </button>
             </form>
           )}
-          <div className="h-6 w-px bg-slate-200 mx-2" />
-          <a
-            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition"
-            href={`/forecast?year=${year - 1}`}
-          >
-            ← {year - 1}
-          </a>
-          <div className="rounded-xl bg-slate-900 px-3 py-2 text-sm text-white shadow-sm">
-            {year}
-          </div>
-          <a
-            className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 transition"
-            href={`/forecast?year=${year + 1}`}
-          >
-            {year + 1} →
-          </a>
         </div>
       </div>
 
-      <UnmatchedList
-        transactions={unmatchedTx as any[]}
-        projectedInstances={enrichedProjected}
-      />
+      {/* ── Hero summary strip ────────────────────────────────────── */}
+      <div className="pixel-box bg-surface grid grid-cols-3 divide-x-2 divide-ink">
+        {/* Opening balance */}
+        <div className="p-5">
+          <div className="font-pixel text-[9px] text-ink-soft uppercase tracking-widest mb-3">
+            liquid start
+          </div>
+          <div className="font-display text-2xl text-ink leading-none">
+            {formatCurrency(openingBalance)}
+          </div>
+          <div className="font-sans text-xs text-ink-soft mt-2">
+            jan 1, {year}
+          </div>
+        </div>
 
-      <ForecastTable rows={rowsWithBalance} detailsByMonth={detailsByMonth} openingBalance={openingBalance} />
+        {/* Committed floor */}
+        <div className="p-5">
+          <div className="font-pixel text-[9px] text-ink-soft uppercase tracking-widest mb-3">
+            committed floor
+          </div>
+          <div className="font-display text-2xl text-ink leading-none">
+            {formatCurrency(yearEndFloor)}
+          </div>
+          <div className="font-sans text-xs text-ink-soft mt-2">
+            year-end · zero variable spending
+          </div>
+        </div>
+
+        {/* Budget ceiling */}
+        <div className="p-5">
+          <div className="font-pixel text-[9px] text-ink-soft uppercase tracking-widest mb-3">
+            budget ceiling
+          </div>
+          <div className="font-display text-2xl text-ink leading-none">
+            {formatCurrency(yearEndCeil)}
+          </div>
+          <div className="font-sans text-xs text-ink-soft mt-2">
+            year-end · all budgets maxed
+            {totalBudgetCap !== 0 && (
+              <span className="ml-1 font-mono">(cap {formatCurrency(Math.abs(totalBudgetCap))})</span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Main forecast table ───────────────────────────────────── */}
+      <ForecastTable rows={tableRows} openingBalance={openingBalance} />
+
+      {/* ── Reconciliation (de-emphasised) ───────────────────────── */}
+      {unmatchedTx.length > 0 && (
+        <UnmatchedList
+          transactions={unmatchedTx as any[]}
+          projectedInstances={enrichedProjected}
+        />
+      )}
     </main>
   );
 }

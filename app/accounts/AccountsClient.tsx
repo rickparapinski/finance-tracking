@@ -3,12 +3,14 @@
 import * as React from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { upsertAccount, archiveAccount, restoreAccount } from "./actions";
 import { EditAccountModal, Account } from "./edit-modal";
 import { useHideBalances } from "@/contexts/hide-balances";
 import { Segs } from "@/components/ui/segs";
 import { AccountIcon } from "@/components/icons/AccountIcon";
 import { slugify } from "@/lib/slugify";
+import { Nah } from "@/components/Nah";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -24,7 +26,7 @@ const CLOSE_DURATION = 200; // must match animate-reveal-up in globals.css
 const labelCls =
   "block text-xs font-mono text-ink-soft mb-1";
 const inputCls =
-  "h-9 w-full rounded-md border-2 border-ink bg-white px-3 text-sm text-ink " +
+  "h-9 w-full border-2 border-ink bg-white px-3 text-sm text-ink " +
   "placeholder:text-ink/30 focus:outline-none focus:border-ink/70 transition-none";
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -83,33 +85,28 @@ export default function AccountsClient({ accounts }: { accounts: Account[] }) {
     <div className="space-y-6">
       <EditAccountModal account={selected} isOpen={isModalOpen} onClose={closeEdit} />
 
-      {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-pixel text-xl text-ink leading-none">accounts</h1>
-          <p className="font-mono text-xs text-ink-soft mt-1">
-            what you have, what you owe
-          </p>
-        </div>
-
-        {/* + new toggle — matches categories page button exactly */}
-        <button
-          onClick={toggle}
-          className={
-            open
-              ? "h-8 px-3 flex items-center gap-1 bg-surface border-2 border-ink text-ink font-mono text-[11px] rounded-md hover:bg-cream-soft transition-none"
-              : "h-8 px-3 flex items-center gap-1 bg-lime border-2 border-ink text-ink font-pixel text-[11px] rounded-md shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
-          }
-        >
-          {open ? <X size={11} className="shrink-0" /> : null}
-          {open ? "cancel" : "+ new"}
-        </button>
-      </div>
+      {/* ── Header ── */}
+      <PageHeader
+        title="accounts"
+        meta="what you have, what you owe"
+        action={
+          <button
+            onClick={toggle}
+            className={
+              open
+                ? "h-8 px-3 flex items-center gap-1 bg-surface border-2 border-ink text-ink font-mono text-[11px] shadow-[2px_2px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none"
+                : "h-8 px-3 flex items-center gap-1 bg-lime border-2 border-ink text-ink font-pixel text-[11px] shadow-[4px_4px_0_#1F1F1F] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#1F1F1F] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-none"
+            }
+          >
+            {open ? <><X size={11} className="shrink-0" />cancel</> : "+ new"}
+          </button>
+        }
+      />
 
       {/* ── Collapsible quick-add form (matches TransactionsTop pattern) ───── */}
       {open && (
         <div
-          className={`bg-surface border-2 border-ink rounded-md overflow-hidden ${
+          className={`bg-surface border-2 border-ink overflow-hidden ${
             closing ? "animate-reveal-up" : "animate-reveal-down"
           }`}
         >
@@ -165,14 +162,14 @@ export default function AccountsClient({ accounts }: { accounts: Account[] }) {
                 <button
                   type="button"
                   onClick={doClose}
-                  className="h-9 px-4 bg-surface border-2 border-ink text-ink font-mono text-sm rounded-md hover:bg-cream-soft transition-none"
+                  className="h-8 px-3 bg-surface border-2 border-ink text-ink font-mono text-[11px] shadow-[4px_4px_0_#1F1F1F] hover:bg-cream-soft active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#1F1F1F] transition-none"
                 >
                   cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="h-9 px-4 bg-lime border-2 border-ink text-ink font-mono text-sm rounded-md hover:opacity-90 disabled:opacity-50 transition-none"
+                  className="h-8 px-3 bg-lime border-2 border-ink text-ink font-pixel text-[11px] shadow-[4px_4px_0_#1F1F1F] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#1F1F1F] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none disabled:opacity-40 disabled:pointer-events-none transition-none"
                 >
                   {isPending ? "saving…" : "save account"}
                 </button>
@@ -184,7 +181,7 @@ export default function AccountsClient({ accounts }: { accounts: Account[] }) {
 
       {/* ── Account sections ─────────────────────────────────────────────────── */}
       {visibleAccounts.length === 0 ? (
-        <div className="rounded-md border-2 border-ink/10 bg-surface p-12 text-center font-mono text-xs text-ink-soft">
+        <div className="border-2 border-ink/10 bg-surface p-12 text-center font-mono text-xs text-ink-soft">
           no accounts yet. create one to get started.
         </div>
       ) : (
@@ -249,7 +246,10 @@ function AccountCard({
   const textPrimary   = isOverUtilized ? "text-cream-soft"    : "text-ink";
   const textSecondary = isOverUtilized ? "text-cream-soft/60" : "text-ink-soft";
   const borderSplit   = isOverUtilized ? "border-cream-soft/10" : "border-ink/10";
-  const hoverPrimary  = isOverUtilized ? "hover:text-cream-soft" : "hover:text-ink";
+
+  const btnFooter = isOverUtilized
+    ? "h-8 border-2 border-cream-soft/20 text-cream-soft/60 font-mono text-[11px] px-3 hover:border-cream-soft/50 hover:text-cream-soft active:translate-x-[2px] active:translate-y-[2px] transition-none"
+    : "h-8 bg-surface border-2 border-ink text-ink font-mono text-[11px] px-3 shadow-[4px_4px_0_#1F1F1F] hover:bg-cream-soft active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#1F1F1F] transition-none";
 
   // Balance label
   const balanceLabel =
@@ -264,11 +264,11 @@ function AccountCard({
 
   return (
     <div
-      className={`self-start w-full rounded-md border-2 border-ink overflow-hidden flex flex-col ${
+      className={`w-full border-2 border-ink overflow-hidden flex flex-col shadow-[4px_4px_0_#1F1F1F] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#1F1F1F] transition-none ${
         isOverUtilized ? "bg-ink" : "bg-surface"
       } ${isArchived ? "opacity-60" : ""}`}
     >
-      <div className="p-4 flex flex-col gap-3">
+      <Link href={`/accounts/${slugify(acc.name)}`} className="flex-1 p-4 flex flex-col gap-3">
 
         {/* ── Header: type icon + name + type + over-utilized chip ── */}
         <div className="flex items-start justify-between gap-2">
@@ -292,12 +292,8 @@ function AccountCard({
             </div>
           </div>
 
-          {/* Over-utilized chip — lime on charcoal, mirrors over-budget on categories */}
-          {isOverUtilized && (
-            <span className="font-mono text-xs text-lime shrink-0 mt-0.5">
-              over-utilized
-            </span>
-          )}
+          {/* Over-utilized — disappointed Nah replaces lime text (lime = positive, P3-3) */}
+          {isOverUtilized && <Nah expression="disappointed" size={48} />}
         </div>
 
         {/* ── Balance ── */}
@@ -349,41 +345,22 @@ function AccountCard({
             borderSplit={borderSplit}
           />
         )}
-      </div>
+      </Link>
 
       {/* ── Footer actions ── */}
-      <div className={`px-4 pb-3 pt-2 flex items-center justify-between gap-2 border-t ${borderSplit}`}>
-        <Link
-          href={`/accounts/${slugify(acc.name)}`}
-          className={`font-mono text-xs ${textSecondary} ${hoverPrimary} transition-none`}
-        >
-          view transactions →
-        </Link>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => onEdit(acc)}
-            className={`font-mono text-xs ${textSecondary} ${hoverPrimary} px-2 py-1 rounded-md transition-none`}
-          >
-            edit
-          </button>
-          {isArchived ? (
-            <form action={restoreAccount.bind(null, acc.id)}>
-              <button
-                className={`font-mono text-xs ${textSecondary} ${hoverPrimary} px-2 py-1 rounded-md transition-none`}
-              >
-                restore
-              </button>
-            </form>
-          ) : (
-            <form action={archiveAccount.bind(null, acc.id)}>
-              <button
-                className={`font-mono text-xs ${textSecondary} ${hoverPrimary} px-2 py-1 rounded-md transition-none`}
-              >
-                archive
-              </button>
-            </form>
-          )}
-        </div>
+      <div className={`px-4 pb-3 pt-2 flex items-center justify-end gap-2 border-t ${borderSplit}`}>
+        <button onClick={() => onEdit(acc)} className={btnFooter}>
+          edit
+        </button>
+        {isArchived ? (
+          <form action={restoreAccount.bind(null, acc.id)}>
+            <button className={btnFooter}>restore</button>
+          </form>
+        ) : (
+          <form action={archiveAccount.bind(null, acc.id)}>
+            <button className={btnFooter}>archive</button>
+          </form>
+        )}
       </div>
     </div>
   );
@@ -430,8 +407,8 @@ function CreditCardSection({
         <span>limit {fmt(creditLimit, currency)}</span>
       </div>
 
-      {/* 8-segment lime bar — no gradients, no red */}
-      <Segs filled={creditFilled} dark={isOverUtilized} />
+      {/* 8-segment bar — lime = available credit (inverted: full lime = all available, empty = maxed) */}
+      <Segs filled={8 - creditFilled} dark={isOverUtilized} />
 
       {/* available · % used */}
       <p className={`font-mono text-xs ${textSecondary}`}>

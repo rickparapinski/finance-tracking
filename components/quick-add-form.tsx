@@ -97,7 +97,6 @@ export function QuickAddForm({ accounts, categories, defaultAccountId, onSuccess
       setIsInstallment(false);
       setInstallmentIndex("1");
       setInstallmentTotal("2");
-      setDate(new Date());
       formRef.current?.reset();
       await onSuccess?.();
     });

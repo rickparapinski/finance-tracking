@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useTransition } from "react";
-import { useRef as useFormRef, useState } from "react";
+import { useEffect, useRef, useTransition, useState } from "react";
 import { X } from "lucide-react";
 import { createRule, updateRule, deleteRule, countMatchingUncategorized } from "./rules/actions";
+import { NahBubble } from "@/components/ui/nah-bubble";
 
 type Rule = {
   id: string;
@@ -14,11 +14,17 @@ type Rule = {
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
 const inputCls =
-  "h-9 w-full rounded-md border-2 border-ink bg-white px-3 text-sm text-ink " +
+  "h-9 w-full border-2 border-ink bg-white px-3 text-sm text-ink " +
   "placeholder:text-ink/30 focus:outline-none focus:border-ink/70 transition-none";
 const labelCls = "block text-xs font-mono text-ink-soft mb-1";
+const btnSec   =
+  "h-8 px-3 bg-surface border-2 border-ink text-ink font-mono text-[11px] " +
+  "shadow-[4px_4px_0_#1F1F1F] hover:bg-cream-soft active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#1F1F1F] transition-none";
+const btnPrimary =
+  "h-8 px-3 bg-lime border-2 border-ink text-ink font-pixel text-[10px] " +
+  "shadow-[4px_4px_0_#1F1F1F] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#1F1F1F] active:translate-x-[4px] active:translate-y-[4px] active:shadow-none transition-none";
 
-// ── Confirm dialog for "apply to existing?" ───────────────────────────────────
+// ── Confirm dialog for "apply to existing?" — NahBubble skeptical (P3-5) ─────
 function ApplyDialog({
   dialog,
   onConfirm,
@@ -31,46 +37,30 @@ function ApplyDialog({
   onClose: () => void;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-surface border-2 border-ink rounded-md shadow-[2px_2px_0_rgba(31,31,31,0.12)] w-full max-w-sm overflow-hidden animate-slide-up">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-surface border-2 border-ink shadow-[4px_4px_0_#1F1F1F] w-full max-w-sm overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b border-ink/10 bg-ink/[0.02]">
-          <h2 className="font-pixel text-sm text-ink">apply to existing?</h2>
+          <span className="font-pixel text-[10px] text-ink">apply to existing?</span>
           <button
             onClick={onClose}
-            className="grid size-7 place-items-center rounded-md text-ink/35 hover:bg-cream-soft hover:text-ink transition-none"
+            className="grid size-7 place-items-center text-ink/35 border-2 border-ink/20 hover:bg-cream-soft hover:text-ink transition-none"
           >
             <X size={13} />
           </button>
         </div>
-        <div className="px-5 py-4">
-          <p className="font-mono text-sm text-ink">
+        <div className="px-5 py-4 space-y-4">
+          <NahBubble expression="skeptical" nahSize={48} layout="side">
             {dialog.count === 0 ? (
-              <>
-                no uncategorized transactions match{" "}
-                <span className="font-mono font-medium">"{dialog.pattern}"</span>.
-              </>
+              <>no matches for &ldquo;{dialog.pattern}&rdquo;.</>
             ) : (
-              <>
-                <span className="font-medium">{dialog.count}</span> uncategorized
-                transaction{dialog.count !== 1 ? "s" : ""} match{" "}
-                <span className="font-medium">"{dialog.pattern}"</span>. categorize
-                them now?
-              </>
+              <>{dialog.count} uncategorized tx match &ldquo;{dialog.pattern}&rdquo;. categorize them?</>
             )}
-          </p>
+          </NahBubble>
         </div>
         <div className="flex justify-end gap-2 px-5 pb-4">
-          <button
-            onClick={onSkip}
-            className="bg-surface border-2 border-ink text-ink font-mono text-sm rounded-md px-4 py-2 hover:bg-cream-soft transition-none"
-          >
-            skip
-          </button>
+          <button onClick={onSkip} className={btnSec}>skip</button>
           {dialog.count > 0 && (
-            <button
-              onClick={onConfirm}
-              className="bg-[#C5F03A] border-2 border-ink text-ink font-mono text-sm font-medium rounded-md px-4 py-2 hover:opacity-90 transition-none"
-            >
+            <button onClick={onConfirm} className={btnPrimary}>
               apply to {dialog.count}
             </button>
           )}
@@ -142,7 +132,7 @@ export function RulesPanel({
         />
       )}
 
-      <div className="bg-surface border-2 border-ink rounded-md p-4 space-y-4 animate-reveal-down">
+      <div className="bg-surface border-2 border-ink shadow-[4px_4px_0_#1F1F1F] p-4 space-y-4 animate-reveal-down">
         <p className={labelCls}>auto-categorization rules</p>
 
         {/* ── Add form ── */}
@@ -158,7 +148,7 @@ export function RulesPanel({
           </div>
           <button
             disabled={pending}
-            className="h-9 px-4 bg-[#C5F03A] border-2 border-ink text-ink font-mono text-sm font-medium rounded-md hover:opacity-90 disabled:opacity-50 transition-none self-end"
+            className={`${btnPrimary} self-end disabled:opacity-50 disabled:pointer-events-none`}
           >
             {pending ? "saving…" : "add"}
           </button>
@@ -175,14 +165,14 @@ export function RulesPanel({
                 <input
                   name="pattern"
                   defaultValue={r.pattern}
-                  className="flex-1 min-w-[140px] h-8 rounded-md border border-ink/20 bg-white px-2 text-sm font-mono text-ink focus:outline-none focus:border-ink/70 transition-none"
+                  className="flex-1 min-w-[140px] h-8 border border-ink/20 bg-white px-2 text-sm font-mono text-ink focus:outline-none focus:border-ink/70 transition-none"
                 />
                 {/* priority */}
                 <input
                   name="priority"
                   type="number"
                   defaultValue={r.priority}
-                  className="w-20 h-8 rounded-md border border-ink/20 bg-white px-2 text-xs font-mono text-ink-soft text-right focus:outline-none focus:border-ink/70 transition-none"
+                  className="w-20 h-8 border border-ink/20 bg-white px-2 text-xs font-mono text-ink-soft text-right focus:outline-none focus:border-ink/70 transition-none"
                 />
                 {/* active toggle */}
                 <label className="flex items-center gap-1.5 cursor-pointer select-none">

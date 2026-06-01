@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarIcon, X } from "lucide-react";
+import { Calendar as CalendarIcon } from "pixelarticons/react/Calendar";
+import { Close as X } from "pixelarticons/react/Close";
 import { type DateRange } from "react-day-picker";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -55,9 +56,12 @@ export function DateRangePicker({ from, to, onChange, className }: DateRangePick
       <PopoverTrigger asChild>
         <button
           className={cn(
-            "h-8 inline-flex items-center gap-2 border-2 border-ink/20 rounded-md bg-cream px-3 font-mono text-[11px] transition-none",
-            "hover:border-ink/40 focus:outline-none focus:border-ink/50",
-            hasSelection ? "text-ink" : "text-ink/35",
+            // Secondary button style — square, surface fill, ink border, 2px shadow (compact for toolbar)
+            "h-7 inline-flex items-center gap-1.5 border-2 border-ink bg-surface px-2.5 font-mono text-[11px]",
+            "shadow-[2px_2px_0_#1F1F1F] hover:bg-cream-soft",
+            "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none",
+            "focus:outline-none transition-none",
+            hasSelection ? "text-ink" : "text-ink/40",
             className
           )}
         >
@@ -67,7 +71,7 @@ export function DateRangePicker({ from, to, onChange, className }: DateRangePick
       </PopoverTrigger>
 
       <PopoverContent
-        className="w-auto p-0 border-2 border-ink rounded-md shadow-[2px_2px_0_rgba(31,31,31,0.12)] bg-surface"
+        className="w-auto p-0 border-2 border-ink shadow-[4px_4px_0_#1F1F1F] bg-surface"
         align="start"
       >
         <Calendar
@@ -99,16 +103,16 @@ export function DateRangePicker({ from, to, onChange, className }: DateRangePick
             {hasSelection && (
               <button
                 onClick={() => onChange("", "")}
-                className="inline-flex items-center gap-1 border-2 border-ink/20 rounded-md px-2 py-0.5 font-pixel text-[10px] text-ink/40 hover:border-ink/40 hover:text-ink/60 transition-none"
+                className="inline-flex items-center gap-1 border-2 border-ink/30 bg-surface px-2 py-0.5 font-pixel text-[10px] text-ink/50 shadow-[1px_1px_0_#1F1F1F] hover:bg-cream-soft transition-none"
               >
-                <X className="w-3 h-3" />
+                <X className="size-3" />
                 clear
               </button>
             )}
             <button
               onClick={apply}
               disabled={!hasSelection}
-              className="inline-flex items-center gap-1 border-2 border-ink bg-lime text-ink rounded-md px-2.5 py-0.5 font-pixel text-[10px] shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-40 disabled:pointer-events-none transition-none"
+              className="inline-flex items-center gap-1 border-2 border-ink bg-lime text-ink px-2.5 py-0.5 font-pixel text-[10px] shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-none active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-40 disabled:pointer-events-none transition-none"
             >
               apply
             </button>

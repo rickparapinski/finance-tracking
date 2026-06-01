@@ -17,8 +17,18 @@
   --color-nah-cheek:  #FF8FAB;
 
   /* ── Design system fonts ──────────────────────────────── */
+  --font-display:    var(--font-silkscreen), "Silkscreen", monospace;
   --font-pixel:      var(--font-pixelify-sans), "Pixelify Sans", monospace;
   --font-mono:       var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
+  --font-sans:       var(--font-inter), "Inter", ui-sans-serif, sans-serif;
+
+  /* ── Pixel chrome tokens ──────────────────────────────── */
+  /* P0-3: stepped/notched border — no border-radius, ever  */
+  --pixel-border:    2px solid #1F1F1F;
+  /* P0-4: hard offset shadow — zero blur, raised state     */
+  --pixel-shadow:    4px 4px 0 #1F1F1F;
+  /* pressed/active state: element translates into shadow   */
+  --pixel-shadow-pressed: 2px 2px 0 #1F1F1F;
 }
 
 :root {
@@ -121,48 +131,79 @@
 body {
   background-color: var(--color-cream);
   color: var(--color-foreground);
-  font-family: var(--font-geist-sans), sans-serif;
+  font-family: var(--font-sans, var(--font-geist-sans), sans-serif);
 }
 
+/* ── Font hierarchy utilities ────────────────────────────
+   Use these via @apply or directly in className.
+   Rule: smaller + denser = more readable font.
+   ─────────────────────────────────────────────────────── */
+.font-display { font-family: var(--font-display); }
+.font-pixel   { font-family: var(--font-pixel); }
+.font-mono    { font-family: var(--font-mono); }
+.font-sans    { font-family: var(--font-sans); }
+
+/* ── Pixel box — the ONE container treatment ──────────────
+   Apply to every card, panel, control strip, dialog.
+   No border-radius. Hard offset shadow.
+   ────────────────────────────────────────────────────── */
+.pixel-box {
+  border: var(--pixel-border);
+  box-shadow: var(--pixel-shadow);
+  border-radius: 0;
+}
+.pixel-box-pressed {
+  border: var(--pixel-border);
+  box-shadow: var(--pixel-shadow-pressed);
+  border-radius: 0;
+  translate: 2px 2px;
+}
+
+/* ── Nah idle — stepped float (sprite feel) ──────────────── */
 @keyframes nah-idle {
-  0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-4px); }
+  0%   { transform: translateY(0px); }
+  50%  { transform: translateY(-4px); }
+  100% { transform: translateY(0px); }
 }
 .nah-idle {
-  animation: nah-idle 2.8s ease-in-out infinite;
+  animation: nah-idle 2.8s steps(6, end) infinite;
 }
 
-/* ── Entrance animations ─────────────────────────────── */
-@keyframes slide-up-fade {
-  from { opacity: 0; transform: translateY(16px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-/** Segmented bar — each segment grows from the left */
+/* ── Segmented bar pop — steps() sprite-style ─────────────── */
 @keyframes seg-pop {
   from { opacity: 0; transform: scaleX(0.15); }
   to   { opacity: 1; transform: scaleX(1); }
 }
-.animate-slide-up {
-  animation: slide-up-fade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+/* (animation applied inline in Segs component with steps(3)) */
+
+/* ── Entrance animations ──────────────────────────────────── */
+/* slide-up: stepped entrance for cards/panels */
+@keyframes slide-up-fade {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
-/**
- * reveal-down — for panels that open *below* a trigger (e.g. Quick Add).
- * Starts slightly above + invisible, drops to resting position.
- * transform-origin: top keeps the scale anchor at the top edge.
- */
+.animate-slide-up {
+  animation: slide-up-fade 0.3s steps(6, end) both;
+}
+
+/* reveal-down — panels opening below a trigger (e.g. Quick Add) */
 @keyframes reveal-down {
-  from { opacity: 0; transform: translateY(-8px) scaleY(0.96); }
-  to   { opacity: 1; transform: translateY(0)   scaleY(1); }
+  from { opacity: 0; transform: translateY(-8px) scaleY(0.92); }
+  to   { opacity: 1; transform: translateY(0)    scaleY(1); }
 }
 .animate-reveal-down {
   transform-origin: top center;
-  animation: reveal-down 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: reveal-down 0.2s steps(4, end) both;
 }
+
 @keyframes reveal-up {
-  from { opacity: 1; transform: translateY(0)   scaleY(1); }
-  to   { opacity: 0; transform: translateY(-8px) scaleY(0.96); }
+  from { opacity: 1; transform: translateY(0)    scaleY(1); }
+  to   { opacity: 0; transform: translateY(-8px) scaleY(0.92); }
 }
 .animate-reveal-up {
   transform-origin: top center;
-  animation: reveal-up 0.2s cubic-bezier(0.4, 0, 1, 1) both;
+  animation: reveal-up 0.16s steps(3, end) both;
 }
+
+/* ── Focus ring — chunky stepped outline (no soft glow) ─────── */
+/* Applied via focus-visible:outline-2 focus-visible:outline-ink in components */

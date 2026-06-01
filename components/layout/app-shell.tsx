@@ -21,13 +21,11 @@ export function AppShell({
 }: AppShellProps) {
   const [collapsed, setCollapsed] = useState(false);
   const sidebarW = collapsed ? SIDEBAR_W_COLLAPSED : SIDEBAR_W_EXPANDED;
-
-  // 12px gap on each side (p-3) so the sidebar floats away from the edges
   const GAP = 12;
 
   return (
     <div className="flex min-h-screen">
-      {/* Floating sidebar — inset from all edges so it doesn't touch the screen border */}
+      {/* Floating sidebar */}
       <div
         className="hidden md:block fixed top-3 left-3 bottom-3 z-10 transition-all duration-300"
         style={{ width: sidebarW }}
@@ -41,7 +39,7 @@ export function AppShell({
         />
       </div>
 
-      {/* Main content — offset by sidebar width + left inset + gap */}
+      {/* Main content */}
       <main
         className="flex-1 transition-all duration-300 hidden md:block"
         style={{ paddingLeft: sidebarW + GAP * 2 }}

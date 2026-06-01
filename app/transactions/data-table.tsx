@@ -11,7 +11,9 @@ import {
   useReactTable,
   RowSelectionState,
 } from "@tanstack/react-table";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
+import { ChevronLeft } from "pixelarticons/react/ChevronLeft";
+import { ChevronRight } from "pixelarticons/react/ChevronRight";
 import { useCountUp } from "@/hooks/use-count-up";
 import { AnimateIn } from "@/components/ui/animate-in";
 import { Transaction } from "@/lib/adapters/types";
@@ -24,13 +26,26 @@ import {
 } from "./actions";
 import { DateRangePicker } from "@/components/date-range-picker";
 
-// ── Shared button tokens ───────────────────────────────────────────────────
-// Secondary: visible ink border, white bg, cream-soft hover, disabled state
+// ── Button taxonomy (P2.5-3) ──────────────────────────────────────────────
+// Secondary — surface fill, ink border, 4px shadow. For: edit, rules, bulk edit, assign, tag, link
 const btnSec =
-  "h-8 bg-surface border-2 border-ink text-ink font-mono text-[11px] rounded-md px-3 hover:bg-cream-soft disabled:bg-cream-soft disabled:text-ink/40 disabled:border-ink/30 disabled:pointer-events-none transition-none";
-// Primary: lime PixelBtn
+  "h-8 bg-surface border-2 border-ink text-ink font-mono text-[11px] px-3 " +
+  "shadow-[4px_4px_0_#1F1F1F] hover:bg-cream-soft " +
+  "active:translate-x-[2px] active:translate-y-[2px] active:shadow-[2px_2px_0_#1F1F1F] " +
+  "disabled:bg-cream-soft disabled:text-ink/40 disabled:border-ink/30 disabled:shadow-none disabled:pointer-events-none transition-none";
+// Primary — lime fill, ink border, 4px shadow. One per screen.
 const btnPrimary =
-  "h-8 bg-lime border-2 border-ink text-ink font-pixel text-[10px] rounded-md px-3 shadow-[2px_2px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_#1F1F1F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none disabled:opacity-40 disabled:pointer-events-none transition-none";
+  "h-8 bg-lime border-2 border-ink text-ink font-pixel text-[10px] px-3 " +
+  "shadow-[4px_4px_0_#1F1F1F] hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-[2px_2px_0_#1F1F1F] " +
+  "active:translate-x-[4px] active:translate-y-[4px] active:shadow-none " +
+  "disabled:opacity-40 disabled:pointer-events-none transition-none";
+// Icon/utility — size-8 square, 2px shadow. For: pagination, back, eye, bell, cycle arrows
+const btnIcon =
+  "size-8 grid place-items-center border-2 border-ink bg-surface text-ink-soft " +
+  "shadow-[2px_2px_0_#1F1F1F] hover:bg-lime hover:text-ink " +
+  "hover:shadow-[1px_1px_0_#1F1F1F] hover:translate-x-[1px] hover:translate-y-[1px] " +
+  "active:translate-x-[2px] active:translate-y-[2px] active:shadow-none " +
+  "disabled:opacity-30 disabled:pointer-events-none transition-none";
 
 interface DataTableProps {
   columns: ColumnDef<Transaction>[];
@@ -45,6 +60,10 @@ interface DataTableProps {
   prevCycleTo?: string;
   /** When true the table card shrinks to fit its rows instead of filling the viewport */
   compact?: boolean;
+  /** Renders inside the context-bar card, left of the preset tabs — for cycle nav on detail pages */
+  cycleNav?: React.ReactNode;
+  /** When true, hides the cycle + last cycle preset tabs (use when cycleNav is provided) */
+  hideCyclePresets?: boolean;
 }
 
 const fmt = (n: number) =>
@@ -77,6 +96,8 @@ export function DataTable({
   prevCycleFrom = "",
   prevCycleTo = "",
   compact = false,
+  cycleNav,
+  hideCyclePresets = false,
 }: DataTableProps) {
   // Presets inside component — captures cycle props
   const PRESETS: Preset[] = [
@@ -202,7 +223,7 @@ export function DataTable({
     setBulkMode((v) => { if (v) setRowSelection({}); return !v; });
 
   // ── Card surface ──────────────────────────────────────────────────────────
-  const card = "bg-surface border-2 border-ink rounded-md shadow-[2px_2px_0_rgba(31,31,31,0.09)]";
+  const card = "bg-surface border-2 border-ink shadow-[4px_4px_0_#1F1F1F]";
 
   return (
     <div className="space-y-3">
@@ -215,58 +236,81 @@ export function DataTable({
         allTags={allTags}
       />
 
-      {/* ── Card 1+2 merged: search row + filter tab row ── */}
+      {/* ── Control strip: one unified time + search + bulk bar ── */}
       <AnimateIn>
       <div className={card}>
-        {/* Search row */}
-        <div className="px-4 py-3 flex items-center gap-3 border-b border-ink/10">
+        {/* Row 1: [cycle nav?] + time preset tabs + search + date picker + bulk edit */}
+        <div className="px-4 py-2.5 flex items-center flex-wrap gap-x-1 gap-y-1 border-b border-ink/10">
+          {/* Cycle nav — only on detail pages; sits left, separated by a hairline */}
+          {cycleNav && (
+            <>
+              <div className="shrink-0 mr-1">{cycleNav}</div>
+              <div className="h-5 w-px bg-ink/15 mx-2 shrink-0" />
+            </>
+          )}
+
+          {/* Preset tabs — filter out cycle/last cycle when cycleNav owns that navigation */}
+          {PRESETS
+            .filter((p) => !hideCyclePresets || (p.label !== "cycle" && p.label !== "last cycle"))
+            .map((p) => (
+              <button
+                key={p.label}
+                onClick={() => applyPreset(p)}
+                className={`font-mono text-xs px-2.5 py-1.5 border-b-2 transition-none ${
+                  activePreset === p.label
+                    ? "border-lime text-ink"
+                    : "border-transparent text-ink/40 hover:text-ink/70 hover:border-ink/20"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+
+          {/* Active custom range indicator */}
+          {!activePreset && (dateFrom || dateTo) && (
+            <span className="font-mono text-[10px] text-ink-soft ml-1 border-b-2 border-lime py-1.5 px-1">
+              {dateFrom || "…"} → {dateTo || "…"}
+            </span>
+          )}
+
+          {/* Spacer */}
+          <div className="flex-1" />
+
+          {/* Search */}
           <input
-            placeholder="search transactions…"
+            placeholder="search…"
             value={globalFilter ?? ""}
             onChange={(e) => setGlobalFilter(e.target.value)}
-            className="h-8 min-w-[180px] flex-1 border-2 border-ink/25 rounded-md bg-cream px-3 font-sans text-sm text-ink placeholder:text-ink/30 focus:outline-none focus:border-ink transition-none"
+            className="h-7 w-[160px] border-2 border-ink/25 bg-cream px-2 font-sans text-xs text-ink placeholder:text-ink/30 focus:outline-none focus:border-ink transition-none"
           />
+
+          {/* Date range picker — secondary style (P2.5-3) */}
           <DateRangePicker
             from={dateFrom}
             to={dateTo}
-            onChange={(from, to) => {
-              setDateFrom(from);
-              setDateTo(to);
-              setActivePreset("");
-            }}
+            onChange={(from, to) => { setDateFrom(from); setDateTo(to); setActivePreset(""); }}
           />
+
+          {/* Bulk edit — secondary style */}
           <button
             onClick={toggleBulkMode}
-            title="Toggle bulk-edit mode (select rows to batch-assign categories / tags)"
+            title="Toggle bulk-edit mode"
             className={bulkMode
-              ? "h-8 bg-ink border-2 border-ink text-cream-soft font-mono text-sm rounded-md px-3 transition-none shrink-0"
-              : `${btnSec} shrink-0`
+              ? "h-7 bg-ink border-2 border-ink text-cream-soft font-mono text-[11px] px-2.5 transition-none shrink-0"
+              : "h-7 bg-surface border-2 border-ink text-ink font-mono text-[11px] px-2.5 shadow-[2px_2px_0_#1F1F1F] hover:bg-cream-soft active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none shrink-0"
             }
           >
             bulk edit
           </button>
         </div>
 
-        {/* Filter tab row — hairline separator from search */}
-        <div className="px-4 py-2 flex items-center flex-wrap gap-y-1">
-          {PRESETS.map((p) => (
-            <button
-              key={p.label}
-              onClick={() => applyPreset(p)}
-              className={`font-mono text-xs px-2.5 py-1.5 border-b-2 transition-none ${
-                activePreset === p.label
-                  ? "border-lime text-ink"
-                  : "border-transparent text-ink/40 hover:text-ink/70 hover:border-ink/20"
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
-          <span className="font-mono text-xs text-ink/30 ml-3">
-            {table.getRowModel().rows.length} / {visibleData.length}
+        {/* Row 2: count + uncategorized filter */}
+        <div className="px-4 py-1.5 flex items-center gap-3">
+          <span className="font-mono text-xs text-ink/30">
+            showing {table.getRowModel().rows.length} of {visibleData.length}
           </span>
           {uncategorizedCount > 0 && (
-            <label className="flex items-center gap-1.5 ml-3 font-sans text-xs text-ink/45 cursor-pointer">
+            <label className="flex items-center gap-1.5 font-sans text-xs text-ink/45 cursor-pointer">
               <input
                 type="checkbox"
                 checked={showOnlyUncategorized}
@@ -289,7 +333,7 @@ export function DataTable({
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="h-8 border-2 border-ink/30 rounded-md bg-white px-2 font-sans text-[11px] text-ink focus:outline-none focus:border-ink"
+            className="h-8 border-2 border-ink/30 bg-white px-2 font-sans text-[11px] text-ink focus:outline-none focus:border-ink"
           >
             <option value="">assign category…</option>
             {categories.filter((c) => c !== "Uncategorized").map((c) => (
@@ -318,7 +362,7 @@ export function DataTable({
             value={bulkTagValue}
             onChange={(e) => setBulkTagValue(e.target.value)}
             placeholder="tag name…"
-            className="h-8 w-28 border-2 border-ink/30 rounded-md bg-white px-2 font-mono text-[11px] placeholder:text-ink/25 focus:outline-none focus:border-ink"
+            className="h-8 w-28 border-2 border-ink/30 bg-white px-2 font-mono text-[11px] placeholder:text-ink/25 focus:outline-none focus:border-ink"
           />
           <button
             disabled={isBulkTagLoading || !bulkTagValue.trim()}
@@ -458,20 +502,22 @@ export function DataTable({
           <span className="font-mono text-xs text-ink/40">
             page {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
             <button
               onClick={() => table.previousPage()}
               disabled={!table.getCanPreviousPage()}
-              className={btnSec}
+              className={btnIcon}
+              title="Previous page"
             >
-              ← prev
+              <ChevronLeft className="size-[14px]" />
             </button>
             <button
               onClick={() => table.nextPage()}
               disabled={!table.getCanNextPage()}
-              className={btnSec}
+              className={btnIcon}
+              title="Next page"
             >
-              next →
+              <ChevronRight className="size-[14px]" />
             </button>
           </div>
         </div>
