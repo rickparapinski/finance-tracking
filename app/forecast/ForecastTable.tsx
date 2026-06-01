@@ -1,370 +1,416 @@
 "use client";
 
-import { useState, Fragment } from "react"; // <--- 1. Import Fragment
+import { useState, Fragment } from "react";
 import { updateForecastInstanceAmount } from "./actions";
 import { formatCurrency } from "@/lib/finance-utils";
-import { clsx } from "clsx";
+import { Segs } from "@/components/ui/segs";
 
-// ... (keep types and helper functions exactly as they are) ...
-
-type MonthRow = {
-  key: string;
-  label: string;
-  opening: number;
-  actual: number;
-  projected: number;
-  net: number;
-  closing: number;
-};
-
-type FcItem = {
+// ─── shared types (imported by page.tsx) ─────────────────────────────────
+export type CommittedItem = {
   id: string;
   date: string;
   amount: number;
   status: "projected" | "realized" | "skipped";
   ruleId?: string;
-  ruleType?: string;
   ruleName?: string;
   category?: string;
   note?: string | null;
   transaction_id?: string | null;
 };
 
-function groupItems(items: FcItem[]) {
-  // ... (keep logic) ...
-  const groups = new Map<string, FcItem[]>();
-  const singles: FcItem[] = [];
+export type BudgetItem = {
+  category: string;
+  ruleName: string;
+  cap: number;      // negative = expense cap
+  spent: number;    // negative = what was spent (asset-account only)
+  remaining: number;
+  ruleId: string;
+};
 
-  items.forEach((item) => {
-    if (item.ruleId) {
-      if (!groups.has(item.ruleId)) groups.set(item.ruleId, []);
-      groups.get(item.ruleId)!.push(item);
-    } else {
-      singles.push(item);
-    }
-  });
+export type MonthRow = {
+  key: string;
+  label: string;
+  isPast: boolean;
+  isCurrent: boolean;
+  floorOpening: number;
+  ceilOpening: number;
+  floorClosing: number;
+  ceilClosing: number;
+  actual: number;
+  committedProjected: number;
+  budgetCap: number;
+  budgetSpent: number;
+  budgetRemaining: number;
+  committedItems: CommittedItem[];
+  budgetItems: BudgetItem[];
+};
 
-  const finalResult: { type: "single" | "group"; data: FcItem | FcItem[] }[] =
-    [];
+// ─── constants ────────────────────────────────────────────────────────────
+const COLS = "grid-cols-[1fr_108px_108px_176px_216px]";
 
-  groups.forEach((groupItems) => {
-    const first = groupItems[0];
-    const isBudget = first.ruleType === "budget";
-
-    if (isBudget || groupItems.length > 1) {
-      finalResult.push({ type: "group", data: groupItems });
-    } else {
-      finalResult.push({ type: "single", data: first });
-    }
-  });
-
-  singles.forEach((s) => finalResult.push({ type: "single", data: s }));
-
-  return finalResult.sort((a, b) => {
-    const itemA = Array.isArray(a.data) ? a.data[0] : a.data;
-    const itemB = Array.isArray(b.data) ? b.data[0] : b.data;
-    return itemA.amount - itemB.amount;
-  });
+// ─── helpers ──────────────────────────────────────────────────────────────
+function budgetFilled(spent: number, cap: number): number {
+  if (cap === 0) return 0;
+  return Math.min(8, Math.round((Math.abs(spent) / Math.abs(cap)) * 8));
 }
 
+function isOverBudget(spent: number, cap: number): boolean {
+  return cap !== 0 && Math.abs(spent) > Math.abs(cap);
+}
+
+// ─── StatusBadge ─────────────────────────────────────────────────────────
+function StatusBadge({ status, isLinked }: { status: string; isLinked: boolean }) {
+  if (status === "realized" || isLinked) {
+    return (
+      <span className="inline-flex items-center px-1.5 py-px bg-lime border border-ink/30 font-mono text-[9px] text-ink uppercase">
+        done
+      </span>
+    );
+  }
+  if (status === "skipped") {
+    return (
+      <span className="inline-flex items-center px-1.5 py-px bg-cream-soft border border-ink/20 font-mono text-[9px] text-ink-soft uppercase">
+        skip
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-1.5 py-px bg-cream border border-ink/20 font-mono text-[9px] text-ink-soft uppercase">
+      soon
+    </span>
+  );
+}
+
+// ─── EditableAmount ───────────────────────────────────────────────────────
+function EditableAmount({
+  item,
+  editingId,
+  setEditingId,
+}: {
+  item: CommittedItem;
+  editingId: string | null;
+  setEditingId: (id: string | null) => void;
+}) {
+  const [val, setVal] = useState(String(item.amount));
+
+  if (item.status === "realized" || item.transaction_id) {
+    return <span className="font-mono text-xs text-ink">{formatCurrency(item.amount)}</span>;
+  }
+
+  if (editingId === item.id) {
+    return (
+      <form
+        onSubmit={async (e) => {
+          e.preventDefault();
+          await updateForecastInstanceAmount(item.id, parseFloat(val));
+          setEditingId(null);
+        }}
+        className="flex justify-end"
+      >
+        <input
+          autoFocus
+          className="w-20 text-right font-mono text-xs p-1 border-2 border-ink bg-cream-soft focus:outline-none"
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onBlur={() => setEditingId(null)}
+        />
+      </form>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => setEditingId(item.id)}
+      className="font-mono text-xs text-ink hover:bg-lime/20 px-1 transition-none cursor-text"
+    >
+      {formatCurrency(item.amount)}
+    </button>
+  );
+}
+
+// ─── BudgetDetailRow ──────────────────────────────────────────────────────
+function BudgetDetailRow({ item }: { item: BudgetItem }) {
+  const filled = budgetFilled(item.spent, item.cap);
+  const over = isOverBudget(item.spent, item.cap);
+  const capAbs = Math.abs(item.cap);
+  const spentAbs = Math.abs(item.spent);
+
+  return (
+    <div
+      className={`flex items-center gap-3 px-4 py-3 border-b border-ink/10 last:border-0 ${
+        over ? "bg-ink" : ""
+      }`}
+    >
+      <div className={`w-32 font-mono text-xs truncate ${over ? "text-cream-soft" : "text-ink"}`}>
+        {item.category}
+      </div>
+      <div className="flex-1">
+        <Segs filled={filled} total={8} dark={over} />
+      </div>
+      <div
+        className={`font-mono text-[10px] w-32 text-right ${
+          over ? "text-cream-soft" : "text-ink-soft"
+        }`}
+      >
+        {formatCurrency(spentAbs)} / {formatCurrency(capAbs)}
+      </div>
+      <div
+        className={`font-mono text-[10px] w-24 text-right ${
+          over ? "text-cream-soft font-bold" : "text-ink-soft"
+        }`}
+      >
+        {over
+          ? `+${formatCurrency(spentAbs - capAbs)} over`
+          : `${formatCurrency(Math.abs(item.remaining))} left`}
+      </div>
+    </div>
+  );
+}
+
+// ─── BudgetSummaryBar (month-row level) ──────────────────────────────────
+function BudgetSummaryBar({ row }: { row: MonthRow }) {
+  if (row.budgetCap === 0) {
+    return <span className="font-mono text-[10px] text-ink/25">—</span>;
+  }
+
+  const filled = budgetFilled(row.budgetSpent, row.budgetCap);
+  const over = isOverBudget(row.budgetSpent, row.budgetCap);
+  const spentAbs = Math.abs(row.budgetSpent);
+  const capAbs = Math.abs(row.budgetCap);
+  const remainAbs = Math.abs(row.budgetRemaining);
+
+  return (
+    <div className="flex items-center gap-2 w-full">
+      <div className="flex-1 min-w-0">
+        <Segs filled={filled} total={8} />
+      </div>
+      <div className="font-mono text-[10px] text-ink-soft shrink-0 text-right w-20">
+        {row.isPast ? (
+          <span>{formatCurrency(spentAbs)}</span>
+        ) : row.isCurrent ? (
+          <span>{formatCurrency(spentAbs)} / {formatCurrency(capAbs)}</span>
+        ) : (
+          over ? (
+            <span className="text-ink">over</span>
+          ) : (
+            <span>cap {formatCurrency(capAbs)}</span>
+          )
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── ExpandedDetail ───────────────────────────────────────────────────────
+function ExpandedDetail({
+  row,
+  editingId,
+  setEditingId,
+}: {
+  row: MonthRow;
+  editingId: string | null;
+  setEditingId: (id: string | null) => void;
+}) {
+  const hasCommitted = row.committedItems.length > 0;
+  const hasBudgets = row.budgetItems.length > 0;
+
+  if (!hasCommitted && !hasBudgets) {
+    return (
+      <div className="px-6 py-5 text-center font-mono text-xs text-ink/30">
+        no items in this period.
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 py-4 space-y-4 bg-cream/40">
+      {hasCommitted && (
+        <div>
+          <div className="font-pixel text-[10px] text-ink-soft uppercase tracking-widest mb-2 px-1">
+            committed
+          </div>
+          <div className="pixel-box bg-surface overflow-hidden">
+            <table className="w-full text-xs">
+              <tbody>
+                {row.committedItems.map((item) => (
+                  <tr
+                    key={item.id}
+                    className="border-b border-ink/5 last:border-0 hover:bg-lime/5 transition-none group"
+                  >
+                    <td className="px-3 py-2.5 font-mono text-[10px] text-ink-soft w-14">
+                      {item.date.slice(8)}.{item.date.slice(5, 7)}
+                    </td>
+                    <td className="px-3 py-2.5 font-sans text-ink">
+                      <div className="text-xs">{item.ruleName}</div>
+                      {item.category && (
+                        <div className="text-[10px] text-ink-soft">{item.category}</div>
+                      )}
+                    </td>
+                    <td className="px-3 py-2.5 w-16">
+                      <StatusBadge status={item.status} isLinked={!!item.transaction_id} />
+                    </td>
+                    <td className="px-3 py-2.5 text-right w-28">
+                      <EditableAmount
+                        item={item}
+                        editingId={editingId}
+                        setEditingId={setEditingId}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {hasBudgets && (
+        <div>
+          <div className="font-pixel text-[10px] text-ink-soft uppercase tracking-widest mb-2 px-1">
+            budgets
+          </div>
+          <div className="pixel-box bg-surface overflow-hidden">
+            {row.budgetItems.map((item) => (
+              <BudgetDetailRow key={item.ruleId} item={item} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Main export ──────────────────────────────────────────────────────────
 export function ForecastTable({
   rows,
-  detailsByMonth,
   openingBalance,
 }: {
   rows: MonthRow[];
-  detailsByMonth: Record<string, FcItem[]>;
   openingBalance: number;
 }) {
   const [openMonth, setOpenMonth] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
-  const StatusBadge = ({
-    status,
-    isLinked,
-  }: {
-    status: string;
-    isLinked: boolean;
-  }) => {
-    if (status === "realized" || isLinked) {
-      return (
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-100 text-emerald-700">
-          Realized
+  return (
+    <div className="pixel-box bg-surface overflow-hidden">
+      {/* Panel header */}
+      <div className="bg-ink px-5 py-3 flex items-center justify-between">
+        <span className="font-pixel text-sm text-cream-soft">monthly breakdown</span>
+        <span className="font-mono text-[9px] text-cream-soft/40 uppercase tracking-widest hidden sm:block">
+          floor = committed · ceiling = +budgets
         </span>
-      );
-    }
-    if (status === "skipped") {
-      return (
-        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600">
-          Skipped
-        </span>
-      );
-    }
-    return (
-      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-100 text-amber-700">
-        Projected
-      </span>
-    );
-  };
+      </div>
 
-  const EditableAmount = ({ item }: { item: FcItem }) => {
-    // ... (keep EditableAmount logic) ...
-    const [val, setVal] = useState(String(item.amount));
-    if (item.status === "realized" || item.transaction_id) {
-      return (
-        <span className={clsMoney(item.amount)}>
-          {formatCurrency(item.amount)}
-        </span>
-      );
-    }
-    if (editingId === item.id) {
-      return (
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            await updateForecastInstanceAmount(item.id, parseFloat(val));
-            setEditingId(null);
-          }}
-          className="flex justify-end"
-        >
-          <input
-            autoFocus
-            className="w-20 text-right text-xs p-1 border border-blue-400 rounded shadow-sm focus:outline-none"
-            value={val}
-            onChange={(e) => setVal(e.target.value)}
-            onBlur={() => setEditingId(null)}
-          />
-        </form>
-      );
-    }
-    return (
-      <button
-        onClick={() => setEditingId(item.id)}
-        className={`hover:bg-slate-100 px-1 rounded transition cursor-text border border-transparent hover:border-slate-200 ${clsMoney(item.amount)}`}
-      >
-        {formatCurrency(item.amount)}
-      </button>
-    );
-  };
+      {/* Column labels */}
+      <div className={`grid ${COLS} px-5 py-2 border-b border-ink/10 bg-cream/60`}>
+        <span className="font-pixel text-[9px] text-ink-soft uppercase tracking-widest">month</span>
+        <span className="font-pixel text-[9px] text-ink-soft uppercase tracking-widest text-right">opening</span>
+        <span className="font-pixel text-[9px] text-ink-soft uppercase tracking-widest text-right">flows</span>
+        <span className="font-pixel text-[9px] text-ink-soft uppercase tracking-widest pl-2">budgets</span>
+        <span className="font-pixel text-[9px] text-ink-soft uppercase tracking-widest text-right">closing</span>
+      </div>
 
-  const BudgetProgressRow = ({ items }: { items: FcItem[] }) => {
-    // ... (keep BudgetProgressRow logic) ...
-    const first = items[0];
+      {/* Opening balance anchor row */}
+      <div className={`grid ${COLS} px-5 py-2.5 border-b-2 border-ink/10 bg-lime/8`}>
+        <div className="font-pixel text-[10px] text-ink/50 self-center">liquid start</div>
+        <div />
+        <div />
+        <div />
+        <div className="font-mono font-bold text-sm text-ink text-right self-center">
+          {formatCurrency(openingBalance)}
+        </div>
+      </div>
 
-    const totalRealized = items
-      .filter((i) => i.status === "realized")
-      .reduce((sum, i) => sum + i.amount, 0);
+      {/* Month rows */}
+      {rows.map((row) => {
+        const isOpen = openMonth === row.key;
+        const netFlows = row.floorClosing - row.floorOpening;
+        const hasRange = !row.isPast && Math.abs(row.budgetRemaining) > 0.01;
+        const hasProjected =
+          row.committedItems.some((i) => i.status === "projected") ||
+          (!row.isPast && row.budgetCap !== 0);
 
-    const totalProjected = items
-      .filter((i) => i.status !== "realized")
-      .reduce((sum, i) => sum + i.amount, 0);
+        return (
+          <Fragment key={row.key}>
+            {/* Summary row */}
+            <div
+              onClick={() => setOpenMonth((m) => (m === row.key ? null : row.key))}
+              className={`grid ${COLS} px-5 py-4 border-b border-ink/10 cursor-pointer transition-none select-none ${
+                isOpen
+                  ? "bg-cream/70"
+                  : row.isCurrent
+                  ? "bg-lime/5 hover:bg-lime/10"
+                  : "hover:bg-cream/50"
+              }`}
+            >
+              {/* Month label */}
+              <div className="flex items-center gap-2 self-center">
+                <span
+                  className={`size-1.5 shrink-0 ${
+                    hasProjected ? "bg-ink/35" : "bg-ink/10"
+                  }`}
+                />
+                <span className="font-pixel text-sm text-ink">{row.label}</span>
+                {row.isCurrent && (
+                  <span className="bg-lime px-1.5 py-px font-mono text-[8px] text-ink uppercase tracking-wider shrink-0">
+                    now
+                  </span>
+                )}
+              </div>
 
-    const totalBudget = totalRealized + totalProjected;
-    const isExpense = totalBudget < 0;
+              {/* Opening */}
+              <div className="font-mono text-xs text-ink-soft text-right self-center">
+                {formatCurrency(row.floorOpening)}
+              </div>
 
-    const absRealized = Math.abs(totalRealized);
-    const absBudget = Math.abs(totalBudget);
-    const spentPct =
-      absBudget === 0 ? 0 : Math.min(100, (absRealized / absBudget) * 100);
+              {/* Net flows (committed/actual) */}
+              <div className="font-mono text-xs text-ink text-right self-center">
+                {netFlows === 0 ? (
+                  <span className="text-ink/25">—</span>
+                ) : (
+                  formatCurrency(netFlows)
+                )}
+              </div>
 
-    return (
-      <tr className="group hover:bg-slate-50 transition">
-        <td className="px-3 py-4 font-mono text-slate-500 align-top w-24 border-b border-slate-50">
-          {first.date.slice(8)}.{first.date.slice(5, 7)}
-        </td>
-        <td className="px-3 py-3 align-middle border-b border-slate-50">
-          <div className="flex flex-col gap-2">
-            <div className="flex justify-between items-center">
-              <div className="font-medium text-slate-800 text-sm">
-                {first.ruleName}
+              {/* Budget bar */}
+              <div className="pl-2 self-center">
+                <BudgetSummaryBar row={row} />
+              </div>
+
+              {/* Closing (floor / range) */}
+              <div className="text-right self-center">
+                {row.isPast ? (
+                  <span className="font-mono font-bold text-sm text-ink">
+                    {formatCurrency(row.floorClosing)}
+                  </span>
+                ) : (
+                  <div className="flex flex-col items-end gap-0.5">
+                    <span className="font-mono font-bold text-sm text-ink">
+                      {formatCurrency(row.floorClosing)}
+                    </span>
+                    {hasRange && (
+                      <span className="font-mono text-[10px] text-ink-soft">
+                        ↓ {formatCurrency(row.ceilClosing)}
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="relative w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
-              <div
-                className={clsx(
-                  "h-full rounded-full transition-all duration-500",
-                  isExpense ? "bg-amber-400" : "bg-emerald-400",
-                )}
-                style={{ width: `${spentPct}%` }}
-              />
-            </div>
-
-            <div className="flex justify-between text-[11px] text-slate-400">
-              <span>
-                Spent:{" "}
-                <span className="font-medium text-slate-600">
-                  {formatCurrency(totalRealized)}
-                </span>
-              </span>
-            </div>
-          </div>
-        </td>
-        <td className="px-3 py-3 align-middle border-b border-slate-50">
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 border border-blue-100 shadow-sm">
-            Budget
-          </span>
-        </td>
-        <td className="px-3 py-3 text-right align-middle font-mono font-bold text-slate-700 border-b border-slate-50">
-          {formatCurrency(totalProjected)}
-        </td>
-      </tr>
-    );
-  };
-
-  return (
-    <div className="overflow-x-auto rounded-[var(--radius)] border border-slate-200 bg-white shadow-[var(--shadow-softer)]">
-      <table className="min-w-full text-sm">
-        <thead className="bg-slate-50 border-b border-slate-200">
-          <tr>
-            <th className="px-4 py-3 text-left text-xs font-bold text-slate-500 uppercase tracking-wider w-48">Month</th>
-            <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Opening</th>
-            <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Actual</th>
-            <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Projected</th>
-            <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Net</th>
-            <th className="px-4 py-3 text-right text-xs font-bold text-slate-500 uppercase tracking-wider">Closing</th>
-          </tr>
-          <tr className="border-b border-indigo-100 bg-indigo-50/50">
-            <td className="px-4 py-2.5 text-xs font-semibold text-indigo-600">Liquid Balance (start of year)</td>
-            <td colSpan={4} />
-            <td className={`px-4 py-2.5 text-right text-xs font-bold tabular-nums ${clsMoneyStrong(openingBalance)}`}>
-              {formatCurrency(openingBalance)}
-            </td>
-          </tr>
-        </thead>
-
-        <tbody className="divide-y divide-slate-100">
-          {rows.map((r) => {
-            const isOpen = openMonth === r.key;
-            const items = detailsByMonth[r.key] ?? [];
-            const grouped = groupItems(items);
-
-            const projectedCount = items.filter(
-              (x) => x.status === "projected",
-            ).length;
-
-            return (
-              /* 2. Changed <> to <Fragment key={...}> */
-              <Fragment key={r.key}>
-                <tr
-                  /* 3. Removed key={r.key} from here, moved to Fragment above */
-                  onClick={() =>
-                    setOpenMonth((m) => (m === r.key ? null : r.key))
-                  }
-                  className={`cursor-pointer transition-colors ${isOpen ? "bg-slate-50" : "hover:bg-slate-50/50"}`}
-                >
-                  <td className="px-4 py-3 font-medium text-slate-900">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`size-1.5 rounded-full ${projectedCount ? "bg-amber-400" : "bg-slate-200"}`}
-                      />
-                      {r.label}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-right text-slate-600 font-mono">
-                    {formatCurrency(r.opening)}
-                  </td>
-                  <td className={`px-4 py-3 text-right ${clsMoney(r.actual)}`}>
-                    {formatCurrency(r.actual)}
-                  </td>
-                  <td
-                    className={`px-4 py-3 text-right ${clsMoney(r.projected)}`}
-                  >
-                    {formatCurrency(r.projected)}
-                  </td>
-                  <td className={`px-4 py-3 text-right ${clsMoney(r.net)}`}>
-                    {formatCurrency(r.net)}
-                  </td>
-                  <td
-                    className={`px-4 py-3 text-right ${clsMoneyStrong(r.closing)}`}
-                  >
-                    {formatCurrency(r.closing)}
-                  </td>
-                </tr>
-
-                {isOpen && (
-                  <tr className="bg-slate-50 shadow-inner">
-                    <td colSpan={6} className="p-4">
-                      {grouped.length === 0 ? (
-                        <div className="text-center text-slate-400 text-xs py-2">
-                          No items in this period
-                        </div>
-                      ) : (
-                        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                          <table className="w-full text-xs">
-                            <thead className="bg-slate-50 border-b border-slate-200">
-                              <tr>
-                                <th className="px-3 py-2 w-24 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Date</th>
-                                <th className="px-3 py-2 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Rule / Description</th>
-                                <th className="px-3 py-2 w-24 text-left text-[10px] font-bold text-slate-500 uppercase tracking-wider">Status</th>
-                                <th className="px-3 py-2 text-right w-32 text-[10px] font-bold text-slate-500 uppercase tracking-wider">Amount</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-50 bg-white">
-                              {grouped.map((entry, idx) => {
-                                if (entry.type === "group") {
-                                  return (
-                                    <BudgetProgressRow
-                                      key={idx}
-                                      items={entry.data as FcItem[]}
-                                    />
-                                  );
-                                }
-                                const it = entry.data as FcItem;
-                                return (
-                                  <tr
-                                    key={it.id}
-                                    className="group hover:bg-blue-50/30 transition"
-                                  >
-                                    <td className="px-3 py-3 font-mono text-slate-500 border-b border-slate-50">
-                                      {it.date.slice(8)}.{it.date.slice(5, 7)}
-                                    </td>
-                                    <td className="px-3 py-3 text-slate-700 border-b border-slate-50">
-                                      <div className="font-medium text-sm">
-                                        {it.ruleName}
-                                      </div>
-                                      <div className="text-[10px] text-slate-400 mt-0.5">
-                                        {it.category}{" "}
-                                        {it.note && `• ${it.note}`}
-                                      </div>
-                                    </td>
-                                    <td className="px-3 py-3 border-b border-slate-50">
-                                      <StatusBadge
-                                        status={it.status}
-                                        isLinked={!!it.transaction_id}
-                                      />
-                                    </td>
-                                    <td className="px-3 py-3 text-right border-b border-slate-50">
-                                      <EditableAmount item={it} />
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            );
-          })}
-        </tbody>
-      </table>
+            {/* Expanded detail panel */}
+            {isOpen && (
+              <div className="border-b border-ink/10">
+                <ExpandedDetail
+                  row={row}
+                  editingId={editingId}
+                  setEditingId={setEditingId}
+                />
+              </div>
+            )}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }
-
-const clsMoney = (n: number) =>
-  n > 0.005
-    ? "text-emerald-700 font-mono"
-    : n < -0.005
-      ? "text-rose-700 font-mono"
-      : "text-slate-400 font-mono";
-const clsMoneyStrong = (n: number) =>
-  n > 0.005
-    ? "text-emerald-800 font-mono font-bold"
-    : n < -0.005
-      ? "text-rose-800 font-mono font-bold"
-      : "text-slate-900 font-mono font-bold";
