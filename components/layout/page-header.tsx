@@ -63,23 +63,25 @@ export function PageHeader({
       {/* Row: Slot A (identity) + Slot B (action) */}
       <div className="flex items-start justify-between gap-4">
         {/* Slot A */}
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-4 min-w-0">
           {/* Back button — square icon, anchored to title row */}
           {back && (
             <Link href={back} className={iconBtnCls} title="back">
               <ChevronLeft className="size-[14px]" />
             </Link>
           )}
-          {icon && <div className="shrink-0">{icon}</div>}
-          <div className="min-w-0">
-            <h1 className="font-pixel text-xl text-ink leading-none lowercase truncate">
-              {title}
-            </h1>
-            {meta && (
-              <p className="font-mono text-xs text-ink-soft mt-1 leading-none">
-                {meta}
-              </p>
-            )}
+          <div className="flex items-center gap-2 min-w-0">
+            {icon && <div className="shrink-0">{icon}</div>}
+            <div className="min-w-0">
+              <h1 className="font-pixel text-xl text-ink leading-none lowercase truncate">
+                {title}
+              </h1>
+              {meta && (
+                <p className="font-mono text-xs text-ink-soft mt-1 leading-none">
+                  {meta}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 

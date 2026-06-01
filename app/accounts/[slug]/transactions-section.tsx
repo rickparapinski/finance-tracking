@@ -90,7 +90,7 @@ export function AccountTransactionsSection({
               accounts={accounts}
               categories={categories}
               defaultAccountId={accountId}
-              onSuccess={() => { doClose(); refresh(); }}
+              onSuccess={refresh}
             />
           </div>
         </div>

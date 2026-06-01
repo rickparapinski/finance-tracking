@@ -76,7 +76,6 @@ export function TransactionsTop({
             <QuickAddForm
               accounts={accounts}
               categories={categories}
-              onSuccess={doClose}
             />
           </div>
         </div>

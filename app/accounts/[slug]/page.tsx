@@ -117,7 +117,7 @@ export default async function AccountDetailPage(props: {
         icon={
           <AccountIcon
             type={account.type}
-            className={`w-7 h-7 shrink-0 ${isOverUtilized ? "text-cream-soft" : "text-ink"}`}
+            className={`w-8 h-8 shrink-0 ${isOverUtilized ? "text-cream-soft" : "text-ink"}`}
           />
         }
         meta={`${account.type.toLowerCase()} · ${currency}${isOverUtilized ? " · over-utilized" : ""}`}
