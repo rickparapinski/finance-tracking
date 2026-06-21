@@ -39,13 +39,20 @@ export async function updateTransaction(formData: FormData) {
   const category = rawCategory.trim() || "Uncategorized";
   const newAmount = parseFloat(formData.get("amount") as string);
 
-  const [oldData] = await sql`SELECT amount, amount_eur FROM transactions WHERE id = ${id}`;
+  const [oldData] = await sql`
+    SELECT t.amount, t.amount_eur, a.currency
+    FROM transactions t
+    JOIN accounts a ON a.id = t.account_id
+    WHERE t.id = ${id}
+  `;
   if (!oldData) throw new Error("Transaction not found");
 
   let newAmountEur = Number(oldData.amount_eur);
   if (newAmount !== Number(oldData.amount)) {
-    if (oldData.amount_eur && Number(oldData.amount_eur) !== 0) {
-      const impliedRate = Number(oldData.amount) / Number(oldData.amount_eur);
+    if (oldData.currency === "EUR") {
+      newAmountEur = newAmount;
+    } else if (oldData.amount_eur && Number(oldData.amount_eur) !== 0) {
+      const impliedRate = Math.abs(Number(oldData.amount) / Number(oldData.amount_eur));
       newAmountEur = newAmount / impliedRate;
     } else {
       newAmountEur = newAmount;
