@@ -16,19 +16,7 @@ export async function upsertCycle(cycle: CycleConfig) {
     ON CONFLICT (key) DO UPDATE SET start_date = EXCLUDED.start_date, end_date = EXCLUDED.end_date
   `;
 
-  // Clean up projected budget instances so they regenerate with new dates
-  const budgetRuleIds = await sql`SELECT id FROM forecast_rules WHERE type = 'budget'`;
-  const ids = budgetRuleIds.map((r) => r.id);
-
-  if (ids.length > 0) {
-    await sql`
-      DELETE FROM forecast_instances
-      WHERE status = 'projected' AND rule_id = ANY(${ids})
-    `;
-  }
-
   revalidatePath("/");
-  revalidatePath("/forecast");
   revalidatePath("/settings");
 }
 

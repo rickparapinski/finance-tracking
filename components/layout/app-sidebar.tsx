@@ -8,7 +8,6 @@ import { Wallet } from "pixelarticons/react/Wallet";
 import { Upload } from "pixelarticons/react/Upload";
 import { Settings2 } from "pixelarticons/react/Settings2";
 import { ListBox } from "pixelarticons/react/ListBox";
-import { Chart } from "pixelarticons/react/Chart";
 import { Logout } from "pixelarticons/react/Logout";
 import { Sparkles } from "pixelarticons/react/Sparkles";
 import { ChevronLeft } from "pixelarticons/react/ChevronLeft";
@@ -44,7 +43,6 @@ const NAV_PRIMARY = [
   { label: "transactions", href: "/transactions", Icon: ArrowsHorizontal },
   { label: "categories",   href: "/categories",   Icon: ListBox },
   { label: "accounts",     href: "/accounts",     Icon: Wallet },
-  { label: "forecast",     href: "/forecast",     Icon: Chart },
   { label: "advisor",      href: "/advisor",      Icon: Sparkles },
 ];
 

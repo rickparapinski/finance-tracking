@@ -3,8 +3,7 @@
 import { sql } from "@/lib/db";
 import { NormalizedTransaction } from "./adapters/types";
 import { fetchRatesForBatch } from "./enricher";
-import { parseInstallment, addMonthsISO } from "./installment";
-import { tryAutoMatchForecast } from "./forecast-automatch";
+import { parseInstallment } from "./installment";
 
 type CategoryRuleRow = {
   category_id: string;
@@ -61,56 +60,6 @@ async function fetchActiveCategoryRules(): Promise<CategoryRuleRow[]> {
     ORDER BY cr.priority ASC
   `;
   return rows as unknown as CategoryRuleRow[];
-}
-
-async function createInstallmentForecasts(rows: {
-  id: string;
-  date: string;
-  amount_eur: number | null;
-  account_id: string;
-  description: string;
-  category: string;
-  installment_index: number;
-  installment_total: number;
-}[]) {
-  for (const row of rows) {
-    const { id, date, amount_eur, account_id, description, category, installment_index, installment_total } = row;
-    const remaining = installment_total - installment_index;
-    if (remaining <= 0) continue;
-
-    const amount = amount_eur ?? 0;
-    const dom = new Date(date).getDate();
-    const startDate = addMonthsISO(date, 1);
-    const endDate = addMonthsISO(date, remaining);
-    const ruleName = `Installments: ${description}`;
-
-    const [rule] = await sql`
-      INSERT INTO forecast_rules
-        (source_transaction_id, account_id, name, type, category, amount, currency,
-         start_date, end_date, frequency, day_of_month, installments_count, is_active)
-      VALUES
-        (${id}, ${account_id}, ${ruleName}, 'recurring', ${category}, ${amount}, 'EUR',
-         ${startDate}, ${endDate}, 'monthly', ${dom}, ${remaining}, true)
-      ON CONFLICT (source_transaction_id) DO UPDATE
-        SET name = EXCLUDED.name, installments_count = EXCLUDED.installments_count,
-            start_date = EXCLUDED.start_date, end_date = EXCLUDED.end_date
-      RETURNING id
-    `;
-
-    const instances = Array.from({ length: remaining }, (_, i) => ({
-      rule_id: rule.id,
-      date: addMonthsISO(date, i + 1),
-      amount,
-      status: "projected",
-      transaction_id: null,
-      note: `Installment ${installment_index + i + 1}/${installment_total}`,
-    }));
-
-    await sql`
-      INSERT INTO forecast_instances ${sql(instances)}
-      ON CONFLICT (rule_id, date) DO NOTHING
-    `;
-  }
 }
 
 export async function saveTransactions(
@@ -194,34 +143,13 @@ export async function saveTransactions(
     return { savedCount: 0, duplicateCount };
   }
 
-  // Bulk insert in chunks, collecting inserted rows for installment processing
-  const insertedWithInstallments: any[] = [];
-  const allInsertedRows: any[] = [];
-
+  // Bulk insert in chunks
   for (const part of chunk(newRows, 500)) {
     const inserted = await sql`
       INSERT INTO transactions ${sql(part)}
-      RETURNING id, date, amount_eur, account_id, description, category,
-                installment_index, installment_total
+      RETURNING id
     `;
     savedCount += inserted.length;
-
-    for (const r of inserted) {
-      allInsertedRows.push(r);
-      if (r.installment_index != null && r.installment_total != null) {
-        insertedWithInstallments.push(r);
-      }
-    }
-  }
-
-  // Create forecasts for incomplete installment series
-  if (insertedWithInstallments.length > 0) {
-    await createInstallmentForecasts(insertedWithInstallments);
-  }
-
-  // Auto-match inserted transactions to projected forecast instances
-  for (const row of allInsertedRows) {
-    await tryAutoMatchForecast(String(row.id));
   }
 
   return { savedCount, duplicateCount };

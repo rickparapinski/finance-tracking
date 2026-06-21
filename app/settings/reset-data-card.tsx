@@ -26,7 +26,7 @@ export function ResetDataCard() {
           <div>
             <h2 className="text-base font-semibold text-slate-900">Reset data</h2>
             <p className="text-sm text-slate-500 mt-1">
-              Wipes all transactions, accounts, and cycles. Keeps categories, rules, and forecast rules.
+              Wipes all transactions, accounts, and cycles. Keeps categories and rules.
             </p>
           </div>
           <button
@@ -58,9 +58,8 @@ export function ResetDataCard() {
                   <li>All transactions</li>
                   <li>All accounts</li>
                   <li>All custom cycles</li>
-                  <li>All forecast instances</li>
                 </ul>
-                <p className="pt-1">Categories, rules, and forecast rules are kept.</p>
+                <p className="pt-1">Categories and rules are kept.</p>
               </div>
 
               <div>
