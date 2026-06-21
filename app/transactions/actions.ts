@@ -199,37 +199,7 @@ export async function createTransferCounterpart(
   revalidatePath("/");
 }
 
-// --- Forecast helpers ---
-type ForecastPlan =
-  | { kind: "none" }
-  | { kind: "pay30" }
-  | { kind: "repeat_monthly"; monthsAhead: number };
-
-function toISODateOnly(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-function addDaysISO(dateISO: string, days: number) {
-  const d = new Date(dateISO);
-  d.setUTCDate(d.getUTCDate() + days);
-  return toISODateOnly(d);
-}
-function addMonthsClamped(dateISO: string, monthsToAdd: number) {
-  const d = new Date(dateISO);
-  const year = d.getUTCFullYear();
-  const month = d.getUTCMonth();
-  const day = d.getUTCDate();
-
-  const targetMonthIndex = month + monthsToAdd;
-  const targetYear = year + Math.floor(targetMonthIndex / 12);
-  const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
-
-  const lastDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
-  const clampedDay = Math.min(day, lastDay);
-
-  return toISODateOnly(new Date(Date.UTC(targetYear, targetMonth, clampedDay)));
-}
-
-export async function updateTransactionWithForecast(
+export async function updateTransactionRecord(
   transactionId: string,
   updated: {
     account_id: string;
@@ -239,7 +209,6 @@ export async function updateTransactionWithForecast(
     amount_eur?: number | null;
     date: string;
   },
-  plan: ForecastPlan,
 ) {
   if (!transactionId) throw new Error("transactionId is required");
 
@@ -251,82 +220,6 @@ export async function updateTransactionWithForecast(
     WHERE id = ${transactionId}
   `;
 
-  if (!plan || plan.kind === "none") {
-    revalidatePath("/transactions");
-    revalidatePath("/forecast");
-    revalidatePath("/");
-    return;
-  }
-
-  const category = (updated.category ?? "").trim() || "Uncategorized";
-  const amount = Number(updated.amount_eur ?? updated.amount);
-  const baseDateISO = updated.date;
-
-  if (plan.kind === "pay30") {
-    const dueDate = addDaysISO(baseDateISO, 30);
-
-    const [rule] = await sql`
-      INSERT INTO forecast_rules
-        (source_transaction_id, name, type, account_id, category, amount, currency, start_date, end_date, is_active)
-      VALUES
-        (${transactionId}, ${"Pay in 30 — " + (updated.description ?? "Transaction")},
-         'one_off', ${updated.account_id}, ${category}, ${amount}, 'EUR', ${dueDate}, ${dueDate}, true)
-      ON CONFLICT (source_transaction_id) DO UPDATE SET
-        name = EXCLUDED.name, type = EXCLUDED.type, account_id = EXCLUDED.account_id,
-        category = EXCLUDED.category, amount = EXCLUDED.amount, start_date = EXCLUDED.start_date,
-        end_date = EXCLUDED.end_date, is_active = EXCLUDED.is_active
-      RETURNING id
-    `;
-
-    await sql`
-      INSERT INTO forecast_instances (rule_id, date, amount, status, transaction_id, note)
-      VALUES (${rule.id}, ${dueDate}, ${amount}, 'projected', null, ${"Created from transaction " + transactionId})
-      ON CONFLICT (rule_id, date) DO NOTHING
-    `;
-  }
-
-  if (plan.kind === "repeat_monthly") {
-    const monthsAhead = Math.max(1, plan.monthsAhead ?? 12);
-    const firstDate = addMonthsClamped(baseDateISO, 1);
-    const dom = new Date(baseDateISO).getUTCDate();
-
-    const [existing] = await sql`
-      SELECT id FROM forecast_rules
-      WHERE source_transaction_id = ${transactionId} AND type = 'recurring'
-    `;
-
-    let ruleId = existing?.id;
-
-    if (!ruleId) {
-      const [created] = await sql`
-        INSERT INTO forecast_rules
-          (source_transaction_id, name, type, account_id, category, amount, currency,
-           start_date, end_date, frequency, day_of_month, is_active)
-        VALUES
-          (${transactionId}, ${"Monthly — " + (updated.description ?? "Transaction")},
-           'recurring', ${updated.account_id}, ${category}, ${amount}, 'EUR',
-           ${firstDate}, null, 'monthly', ${dom}, true)
-        RETURNING id
-      `;
-      ruleId = created.id;
-    }
-
-    const instances = Array.from({ length: monthsAhead }).map((_, i) => ({
-      rule_id: ruleId,
-      date: addMonthsClamped(firstDate, i),
-      amount,
-      status: "projected",
-      transaction_id: null,
-      note: null,
-    }));
-
-    await sql`
-      INSERT INTO forecast_instances ${sql(instances)}
-      ON CONFLICT (rule_id, date) DO NOTHING
-    `;
-  }
-
   revalidatePath("/transactions");
-  revalidatePath("/forecast");
   revalidatePath("/");
 }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { X } from "lucide-react";
 import { Transaction } from "@/lib/adapters/types";
-import { updateTransactionWithForecast, createTransferCounterpart, setTransactionTag } from "./actions";
+import { updateTransactionRecord, createTransferCounterpart, setTransactionTag } from "./actions";
 
 interface EditModalProps {
   transaction: Transaction | null;
@@ -12,36 +12,6 @@ interface EditModalProps {
   categories: string[];
   accounts: { id: string; name: string }[];
   allTags?: string[];
-}
-
-type ForecastPlan =
-  | { kind: "none" }
-  | { kind: "pay30" }
-  | { kind: "repeat_monthly"; monthsAhead: number };
-
-function fmtDate(d: Date) {
-  return d.toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function addDaysLocal(base: Date, days: number) {
-  const d = new Date(base);
-  d.setDate(d.getDate() + days);
-  return d;
-}
-
-function addMonthsClampedLocal(base: Date, months: number) {
-  const d = new Date(base);
-  const day = d.getDate();
-  const target = new Date(d);
-  target.setDate(1);
-  target.setMonth(target.getMonth() + months);
-  const lastDay = new Date(target.getFullYear(), target.getMonth() + 1, 0).getDate();
-  target.setDate(Math.min(day, lastDay));
-  return target;
 }
 
 // ── Design-system tokens ───────────────────────────────────────────────────────
@@ -61,7 +31,6 @@ export function EditModal({
   const [isLoading, setIsLoading] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
   const [transferAccountId, setTransferAccountId] = useState("");
-  const [forecastPlan, setForecastPlan] = useState<ForecastPlan>({ kind: "none" });
 
   const [form, setForm] = useState({
     date: "",
@@ -80,25 +49,10 @@ export function EditModal({
       category: (transaction.category ?? "").trim() || "Uncategorized",
       tag: (transaction as any).tag ?? "",
     });
-    setForecastPlan({ kind: "none" });
     setTransferAccountId("");
     setTransferError(null);
     setIsLoading(false);
   }, [transaction?.id, isOpen]);
-
-  const preview = useMemo(() => {
-    if (forecastPlan.kind === "none") return null;
-    if (!form.date) return "Pick a date to preview the forecast.";
-    const base = new Date(form.date + "T12:00:00");
-    if (Number.isNaN(base.getTime())) return "Invalid date.";
-    if (forecastPlan.kind === "pay30") {
-      return `This payment is expected on ${fmtDate(addDaysLocal(base, 30))} (30 days).`;
-    }
-    if (forecastPlan.kind === "repeat_monthly") {
-      return `Repeats monthly from ${fmtDate(addMonthsClampedLocal(base, 1))} for ${forecastPlan.monthsAhead} months.`;
-    }
-    return null;
-  }, [forecastPlan, form.date]);
 
   if (!isOpen || !transaction) return null;
 
@@ -107,7 +61,7 @@ export function EditModal({
     setIsLoading(true);
     setTransferError(null);
     try {
-      await updateTransactionWithForecast(
+      await updateTransactionRecord(
         transaction.id,
         {
           account_id: (transaction as any).account_id ?? transaction.accountId,
@@ -119,13 +73,11 @@ export function EditModal({
             const oldAmountEur = Number((transaction as any).amount_eur);
             const newAmount = Number(form.amount);
             if (newAmount === oldAmount) return oldAmountEur || null;
-            // Preserve implied exchange rate; for EUR accounts rate=1
             const rate = oldAmount !== 0 && oldAmountEur !== 0 ? oldAmountEur / oldAmount : 1;
             return Number((newAmount * rate).toFixed(2));
           })(),
           date: form.date,
         },
-        forecastPlan,
       );
       await setTransactionTag(transaction.id, form.tag.trim() || null);
       if (transferAccountId) {
@@ -138,12 +90,6 @@ export function EditModal({
       setIsLoading(false);
     }
   };
-
-  // ── Forecast button classes ────────────────────────────────────────────────
-  const fcastBtn = (active: boolean) =>
-    active
-      ? "bg-ink border-2 border-ink text-cream-soft font-mono text-xs rounded-md px-3 py-1.5 transition-none"
-      : "bg-surface border-2 border-ink text-ink font-mono text-xs rounded-md px-3 py-1.5 hover:bg-cream-soft transition-none";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -253,50 +199,6 @@ export function EditModal({
             {transferError && (
               <p className="mt-1.5 text-xs text-rose-600">{transferError}</p>
             )}
-          </div>
-
-          {/* forecast */}
-          <div>
-            <label className={labelCls}>forecast</label>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setForecastPlan({ kind: "pay30" })}
-                className={fcastBtn(forecastPlan.kind === "pay30")}
-              >
-                klarna: pay in 30 days
-              </button>
-              <button
-                type="button"
-                onClick={() => setForecastPlan({ kind: "repeat_monthly", monthsAhead: 12 })}
-                className={fcastBtn(forecastPlan.kind === "repeat_monthly")}
-              >
-                repeat monthly
-              </button>
-              <button
-                type="button"
-                onClick={() => setForecastPlan({ kind: "none" })}
-                className={fcastBtn(false)}
-              >
-                clear forecast
-              </button>
-              <a
-                href="/forecast"
-                className="bg-surface border-2 border-ink text-ink font-mono text-xs rounded-md px-3 py-1.5 hover:bg-cream-soft transition-none"
-              >
-                open forecast →
-              </a>
-            </div>
-
-            {preview && (
-              <div className="mt-2 rounded-md border-2 border-ink/15 bg-cream px-3 py-2 font-mono text-xs text-ink/70">
-                {preview}
-              </div>
-            )}
-
-            <p className="mt-2 text-xs text-ink-soft italic">
-              "repeat monthly" starts next month to avoid double-counting this month.
-            </p>
           </div>
 
           {/* actions */}

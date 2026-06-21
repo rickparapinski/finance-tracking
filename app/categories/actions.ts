@@ -4,58 +4,6 @@ import { revalidatePath } from "next/cache";
 import { sql } from "@/lib/db";
 import { toSlug } from "@/lib/slug";
 
-async function syncBudgetRule(
-  categoryId: string,
-  name: string,
-  type: string,
-  budget: number,
-) {
-  if (!budget || budget <= 0) {
-    const [existing] = await sql`
-      SELECT id FROM forecast_rules
-      WHERE category_id = ${categoryId} AND type = 'budget'
-    `;
-
-    if (existing) {
-      await sql`DELETE FROM forecast_instances WHERE rule_id = ${existing.id} AND status = 'projected'`;
-      await sql`DELETE FROM forecast_rules WHERE id = ${existing.id}`;
-    }
-    return;
-  }
-
-  const finalAmount = type === "expense" ? -Math.abs(budget) : Math.abs(budget);
-
-  const [existing] = await sql`
-    SELECT id FROM forecast_rules
-    WHERE category_id = ${categoryId} AND type = 'budget'
-  `;
-
-  if (existing) {
-    await sql`
-      UPDATE forecast_rules
-      SET name = ${"Budget: " + name}, category = ${name}, amount = ${finalAmount}, is_active = true
-      WHERE id = ${existing.id}
-    `;
-    await sql`
-      UPDATE forecast_instances
-      SET amount = ${finalAmount}
-      WHERE rule_id = ${existing.id} AND status = 'projected'
-    `;
-  } else {
-    const [acc] = await sql`SELECT id FROM accounts LIMIT 1`;
-
-    if (!acc) throw new Error("You must have at least one account created to add a budget.");
-
-    await sql`
-      INSERT INTO forecast_rules
-        (account_id, category_id, name, type, category, amount, currency, start_date, frequency, day_of_month, is_active)
-      VALUES
-        (${acc.id}, ${categoryId}, ${"Budget: " + name}, 'budget', ${name}, ${finalAmount},
-         'EUR', ${new Date().toISOString().slice(0, 10)}, 'monthly', 1, true)
-    `;
-  }
-}
-
 export async function getSpendingForCycle(
   startDate: string,
   endDate: string,
@@ -99,8 +47,6 @@ export async function createCategory(formData: FormData) {
     RETURNING id
   `;
 
-  await syncBudgetRule(data.id, name, type, budget);
-
   revalidatePath("/categories");
 }
 
@@ -122,8 +68,6 @@ export async function updateCategory(formData: FormData) {
     WHERE id = ${id}
     RETURNING slug
   `;
-
-  await syncBudgetRule(id, name, type, is_active ? budget : 0);
 
   revalidatePath("/categories");
   if (updated?.slug) revalidatePath(`/categories/${updated.slug}`);

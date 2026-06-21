@@ -2,8 +2,6 @@
 
 import { sql } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { addMonthsISO } from "@/lib/installment";
-import { tryAutoMatchForecast } from "@/lib/forecast-automatch";
 import { slugify } from "@/lib/slugify";
 
 export async function getSpotRate(currency: string): Promise<number | null> {
@@ -72,8 +70,6 @@ export async function createQuickTransaction(formData: FormData) {
     RETURNING id
   `;
 
-  await tryAutoMatchForecast(String(tx.id));
-
   // If Transfer with a counterpart account, mirror the transaction and link them
   if (category === "Transfer" && counterpart_account_id) {
     const [counterAccount] = await sql`
@@ -100,49 +96,7 @@ export async function createQuickTransaction(formData: FormData) {
     `;
   }
 
-  // Create forecast entries for remaining installments
-  if (
-    installment_index != null &&
-    installment_total != null &&
-    installment_index < installment_total
-  ) {
-    const remaining = installment_total - installment_index;
-    const forecastAmount = amount_eur ?? amount;
-    const dom = new Date(date).getDate();
-    const startDate = addMonthsISO(date, 1);
-    const endDate = addMonthsISO(date, remaining);
-    const ruleName = `Installments: ${description}`;
-
-    const [rule] = await sql`
-      INSERT INTO forecast_rules
-        (source_transaction_id, account_id, name, type, category, amount, currency,
-         start_date, end_date, frequency, day_of_month, installments_count, is_active)
-      VALUES
-        (${tx.id}, ${account_id}, ${ruleName}, 'recurring', ${category}, ${forecastAmount}, 'EUR',
-         ${startDate}, ${endDate}, 'monthly', ${dom}, ${remaining}, true)
-      ON CONFLICT (source_transaction_id) DO UPDATE
-        SET name = EXCLUDED.name, installments_count = EXCLUDED.installments_count,
-            start_date = EXCLUDED.start_date, end_date = EXCLUDED.end_date
-      RETURNING id
-    `;
-
-    const instances = Array.from({ length: remaining }, (_, i) => ({
-      rule_id: rule.id,
-      date: addMonthsISO(date, i + 1),
-      amount: forecastAmount,
-      status: "projected",
-      transaction_id: null,
-      note: `Installment ${installment_index + i + 1}/${installment_total}`,
-    }));
-
-    await sql`
-      INSERT INTO forecast_instances ${sql(instances)}
-      ON CONFLICT (rule_id, date) DO NOTHING
-    `;
-  }
-
   revalidatePath("/transactions");
-  revalidatePath("/forecast");
   revalidatePath("/");
   revalidatePath(`/accounts/${slugify(account.name)}`);
   if (counterpart_account_id) {
