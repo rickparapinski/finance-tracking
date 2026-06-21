@@ -25,13 +25,3 @@ export function parseInstallment(description: string): InstallmentInfo | null {
   return { index, total, baseDescription };
 }
 
-export function addMonthsISO(dateISO: string, n: number): string {
-  const d = new Date(dateISO);
-  d.setMonth(d.getMonth() + n);
-  return d.toISOString().slice(0, 10);
-}
-
-/** Build the installment label for a given index, e.g. "Parcela 3/6" */
-export function installmentLabel(index: number, total: number): string {
-  return `Parcela ${index}/${total}`;
-}
