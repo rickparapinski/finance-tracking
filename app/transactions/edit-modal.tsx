@@ -35,6 +35,7 @@ export function EditModal({
   const [form, setForm] = useState({
     date: "",
     amount: "",
+    amountEur: "",
     description: "",
     category: "Uncategorized",
     tag: "",
@@ -45,6 +46,7 @@ export function EditModal({
     setForm({
       date: transaction.date?.split("T")[0] ?? "",
       amount: String(transaction.amount ?? ""),
+      amountEur: String((transaction as any).amount_eur ?? ""),
       description: transaction.description ?? "",
       category: (transaction.category ?? "").trim() || "Uncategorized",
       tag: (transaction as any).tag ?? "",
@@ -61,21 +63,26 @@ export function EditModal({
     setIsLoading(true);
     setTransferError(null);
     try {
+      const isNonEur = (transaction.original_currency ?? "EUR") !== "EUR";
+      const newAmount = Number(form.amount);
+      let newAmountEur: number | null;
+
+      if (isNonEur) {
+        // Non-EUR: use the explicit EUR field the user can edit
+        const parsed = parseFloat(form.amountEur);
+        newAmountEur = Number.isNaN(parsed) ? null : parsed;
+      } else {
+        newAmountEur = newAmount;
+      }
+
       await updateTransactionRecord(
         transaction.id,
         {
           account_id: (transaction as any).account_id ?? transaction.accountId,
           description: form.description,
           category: form.category,
-          amount: Number(form.amount),
-          amount_eur: (() => {
-            const oldAmount = Number((transaction as any).amount);
-            const oldAmountEur = Number((transaction as any).amount_eur);
-            const newAmount = Number(form.amount);
-            if (newAmount === oldAmount) return oldAmountEur || null;
-            const rate = oldAmount !== 0 && oldAmountEur !== 0 ? oldAmountEur / oldAmount : 1;
-            return Number((newAmount * rate).toFixed(2));
-          })(),
+          amount: newAmount,
+          amount_eur: newAmountEur,
           date: form.date,
         },
       );
@@ -136,6 +143,25 @@ export function EditModal({
               </div>
             </div>
           </div>
+
+          {/* EUR equivalent — only shown for non-EUR transactions */}
+          {(transaction.original_currency ?? "EUR") !== "EUR" && (
+            <div>
+              <label className={labelCls}>eur equivalent</label>
+              <div className="relative">
+                <input
+                  type="number"
+                  step="0.01"
+                  value={form.amountEur}
+                  onChange={(e) => setForm((f) => ({ ...f, amountEur: e.target.value }))}
+                  className={`${inputCls} text-right pr-10`}
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[10px] text-ink/35 pointer-events-none">
+                  EUR
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* description */}
           <div>
