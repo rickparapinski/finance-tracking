@@ -28,6 +28,7 @@ export default async function CategoryDetailPage({
   const startStr = start.toISOString().slice(0, 10);
   const endStr = end.toISOString().slice(0, 10);
   const periods = buildPeriodList(startStr, endStr, key);
+  const prevPeriod = periods[1];
 
   const [rules, transactions, categoriesRows, accountsRows, spentRows] = await Promise.all([
     sql`SELECT * FROM category_rules WHERE category_id = ${categoryId} ORDER BY priority ASC, pattern ASC`,
@@ -36,7 +37,6 @@ export default async function CategoryDetailPage({
       FROM transactions t
       LEFT JOIN accounts a ON t.account_id = a.id
       WHERE t.category = ${category.name}
-        AND t.date >= ${startStr} AND t.date <= ${endStr}
       ORDER BY t.date DESC
     `,
     sql`SELECT name FROM categories ORDER BY name ASC`,
@@ -62,8 +62,10 @@ export default async function CategoryDetailPage({
       <TransactionsSection
         categoryName={category.name as string}
         initialTransactions={transactions as any[]}
-        periods={periods}
-        currentCycleKey={key}
+        cycleFrom={startStr}
+        cycleTo={endStr}
+        prevCycleFrom={prevPeriod?.start_date ?? ""}
+        prevCycleTo={prevPeriod?.end_date ?? ""}
         categories={categoriesRows.map((c: any) => c.name)}
         accounts={accountsRows.map((a: any) => ({ id: a.id, name: a.name }))}
       />

@@ -6,14 +6,21 @@ import { slugify } from "@/lib/slugify";
 
 export async function getAccountTransactions(
   accountId: string,
-  startDate: string,
-  endDate: string,
+  startDate?: string | null,
+  endDate?: string | null,
 ) {
+  if (startDate && endDate) {
+    return await sql`
+      SELECT *
+      FROM transactions
+      WHERE account_id = ${accountId}
+        AND date >= ${startDate} AND date <= ${endDate}
+      ORDER BY date DESC
+    `;
+  }
   return await sql`
-    SELECT *
-    FROM transactions
+    SELECT * FROM transactions
     WHERE account_id = ${accountId}
-      AND date >= ${startDate} AND date <= ${endDate}
     ORDER BY date DESC
   `;
 }
