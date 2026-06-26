@@ -76,9 +76,32 @@ export async function createQuickTransaction(formData: FormData) {
       SELECT currency FROM accounts WHERE id = ${counterpart_account_id}
     `;
 
-    const counterAmount = -amount;
-    const counterAmountEur = amount_eur != null ? -amount_eur : null;
     const counterCurrency = counterAccount?.currency ?? "EUR";
+
+    // For cross-currency transfers, estimate the native amount in the target currency.
+    // Same-currency: just negate. EUR→foreign: convert via spot rate. Foreign→EUR: use amount_eur.
+    let counterAmount: number;
+    let counterAmountEur: number | null = amount_eur != null ? -amount_eur : null;
+
+    if (counterCurrency === currency) {
+      counterAmount = -amount;
+    } else if (currency === "EUR") {
+      // Source is EUR → estimate target native amount using today's spot rate
+      const spotRate = await getSpotRate(counterCurrency); // units of counterCurrency per EUR
+      counterAmount = spotRate != null
+        ? parseFloat((-amount * spotRate).toFixed(2))
+        : -amount;
+    } else if (counterCurrency === "EUR") {
+      // Target is EUR → use the EUR-equivalent as the native amount
+      counterAmount = amount_eur != null ? -amount_eur : -amount;
+      counterAmountEur = counterAmount;
+    } else {
+      // Both non-EUR: estimate via EUR equivalent and target spot rate
+      const spotRate = await getSpotRate(counterCurrency);
+      counterAmount = amount_eur != null && spotRate != null
+        ? parseFloat((-amount_eur * spotRate).toFixed(2))
+        : -amount;
+    }
 
     const [counterTx] = await sql`
       INSERT INTO transactions
