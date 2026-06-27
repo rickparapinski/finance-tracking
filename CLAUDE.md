@@ -150,3 +150,17 @@ Priority order: (1) imported category if non-empty → (2) highest-priority matc
 - `check-april-income.mjs` — Audit: lists positive transactions for April 2026
 
 Both read `.env.local` directly and connect to PostgreSQL.
+
+---
+
+## Deployment
+
+Production runs in an LXC container (Proxmox) at `192.168.178.50` under `/opt/finance-tracker`, served via Docker Compose (`app` + `db` services).
+
+To deploy after merging to `main`:
+
+```bash
+npm run deploy
+```
+
+This SSHes into the LXC, pulls `main`, rebuilds the Docker image, and restarts the app container. The `db` container is never restarted. SSH key (`~/.ssh/id_ed25519`) is already authorized on the LXC.
