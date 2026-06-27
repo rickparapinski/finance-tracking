@@ -64,6 +64,8 @@ interface DataTableProps {
   cycleNav?: React.ReactNode;
   /** When true, hides the cycle + last cycle preset tabs (use when cycleNav is provided) */
   hideCyclePresets?: boolean;
+  /** Override which preset is active on first render (default: "cycle" when cycleFrom set, else "all") */
+  initialPreset?: string;
 }
 
 const fmt = (n: number) =>
@@ -98,6 +100,7 @@ export function DataTable({
   compact = false,
   cycleNav,
   hideCyclePresets = false,
+  initialPreset,
 }: DataTableProps) {
   // Presets inside component — captures cycle props
   const PRESETS: Preset[] = [
@@ -115,9 +118,10 @@ export function DataTable({
   const [bulkMode, setBulkMode] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("");
   const [showOnlyUncategorized, setShowOnlyUncategorized] = useState(false);
-  const [dateFrom, setDateFrom] = useState(cycleFrom);
-  const [dateTo, setDateTo] = useState(cycleTo);
-  const [activePreset, setActivePreset] = useState<string>(cycleFrom ? "cycle" : "all");
+  const initPreset = initialPreset ?? (cycleFrom ? "cycle" : "all");
+  const [dateFrom, setDateFrom] = useState(initPreset === "all" ? "" : cycleFrom);
+  const [dateTo, setDateTo] = useState(initPreset === "all" ? "" : cycleTo);
+  const [activePreset, setActivePreset] = useState<string>(initPreset);
   const [bulkTagValue, setBulkTagValue] = useState("");
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [isBulkTagLoading, setIsBulkTagLoading] = useState(false);
@@ -500,7 +504,10 @@ export function DataTable({
         {/* ── Pagination — inside the card, below tfoot ── */}
         <div className="border-t border-ink/10 px-4 py-2.5 flex items-center justify-between bg-ink/[0.02]">
           <span className="font-mono text-xs text-ink/40">
-            page {table.getState().pagination.pageIndex + 1} / {table.getPageCount()}
+            {(() => {
+              const pc = table.getPageCount();
+              return `page ${pc === 0 ? 0 : table.getState().pagination.pageIndex + 1} / ${pc}`;
+            })()}
           </span>
           <div className="flex items-center gap-1.5">
             <button

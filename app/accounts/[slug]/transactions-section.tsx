@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { DataTable } from "@/app/transactions/data-table";
 import { columnsForAccount } from "./transactions-columns";
 import { getAccountTransactions } from "./actions";
 import { QuickAddForm } from "@/components/quick-add-form";
-import { CycleNavigator } from "@/components/cycle-navigator";
 import { Close } from "pixelarticons/react/Close";
-import { type Period } from "@/lib/periods";
 import { Transaction } from "@/lib/adapters/types";
 
 const CLOSE_DURATION = 200;
@@ -15,37 +13,30 @@ const CLOSE_DURATION = 200;
 export function AccountTransactionsSection({
   accountId,
   initialTransactions,
-  periods,
-  currentCycleKey,
+  cycleFrom,
+  cycleTo,
+  prevCycleFrom,
+  prevCycleTo,
   categories,
   accounts,
   uncategorizedCount,
 }: {
   accountId: string;
   initialTransactions: Transaction[];
-  periods: Period[];
-  currentCycleKey: string;
+  cycleFrom: string;
+  cycleTo: string;
+  prevCycleFrom: string;
+  prevCycleTo: string;
   categories: string[];
   accounts: { id: string; name: string; currency: string }[];
   uncategorizedCount: number;
 }) {
   const [transactions, setTransactions] = useState(initialTransactions);
-  const [selectedKey, setSelectedKey]   = useState(currentCycleKey);
-  const [isPending, startTransition]    = useTransition();
   const [open, setOpen]                 = useState(false);
   const [closing, setClosing]           = useState(false);
 
-  const handlePeriodChange = (period: Period) => {
-    setSelectedKey(period.key);
-    startTransition(async () => {
-      const data = await getAccountTransactions(accountId, period.start_date, period.end_date);
-      setTransactions(data as Transaction[]);
-    });
-  };
-
   const refresh = async () => {
-    const period = periods.find((p) => p.key === selectedKey) ?? periods[0];
-    const data = await getAccountTransactions(accountId, period.start_date, period.end_date);
+    const data = await getAccountTransactions(accountId);
     setTransactions(data as Transaction[]);
   };
 
@@ -61,7 +52,7 @@ export function AccountTransactionsSection({
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="font-pixel text-sm text-ink lowercase">transactions</h2>
-          <p className="font-mono text-xs text-ink-soft">{transactions.length} in this period</p>
+          <p className="font-mono text-xs text-ink-soft">{transactions.length} total</p>
         </div>
         <button
           onClick={() => { if (open) doClose(); else setOpen(true); }}
@@ -96,23 +87,17 @@ export function AccountTransactionsSection({
         </div>
       )}
 
-      {/* DataTable — CycleNavigator lives inside the control strip (P2.5-1) */}
       <DataTable
         columns={columnsForAccount}
         data={transactions}
         categories={categories}
         accounts={accounts}
         uncategorizedCount={uncategorizedCount}
-        hideCyclePresets
-        cycleNav={
-          <CycleNavigator
-            periods={periods}
-            currentKey={currentCycleKey}
-            selectedKey={selectedKey}
-            isPending={isPending}
-            onChange={handlePeriodChange}
-          />
-        }
+        cycleFrom={cycleFrom}
+        cycleTo={cycleTo}
+        prevCycleFrom={prevCycleFrom}
+        prevCycleTo={prevCycleTo}
+        initialPreset="all"
       />
     </section>
   );

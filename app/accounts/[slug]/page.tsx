@@ -18,6 +18,7 @@ export default async function AccountDetailPage(props: {
   const startStr = start.toISOString().slice(0, 10);
   const endStr = end.toISOString().slice(0, 10);
   const periods = buildPeriodList(startStr, endStr, key);
+  const prevPeriod = periods[1];
 
   const accounts = await sql`SELECT * FROM accounts`;
   const account = accounts.find((a: any) => slugify(a.name) === slug);
@@ -28,7 +29,6 @@ export default async function AccountDetailPage(props: {
     sql`
       SELECT * FROM transactions
       WHERE account_id = ${accountId}
-        AND date >= ${startStr} AND date <= ${endStr}
       ORDER BY date DESC
     `,
     sql`SELECT id, name FROM categories ORDER BY name ASC`,
@@ -189,8 +189,10 @@ export default async function AccountDetailPage(props: {
       <AccountTransactionsSection
         accountId={accountId}
         initialTransactions={transactions as any[]}
-        periods={periods}
-        currentCycleKey={key}
+        cycleFrom={startStr}
+        cycleTo={endStr}
+        prevCycleFrom={prevPeriod?.start_date ?? ""}
+        prevCycleTo={prevPeriod?.end_date ?? ""}
         categories={categories}
         accounts={allAccounts.map((a: any) => ({ id: a.id, name: a.name, currency: a.currency || "EUR" }))}
         uncategorizedCount={uncategorizedCount}
