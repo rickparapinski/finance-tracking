@@ -63,6 +63,8 @@ Schema source: `schema.sql` (idempotent, safe to re-run).
 | `middleware.ts` | Auth enforcement; public: `/login`, `/api/ingest`, `/api/telegram` |
 | `app/layout.tsx` | Root layout: queries all accounts + inbox count on every render |
 | `app/page.tsx` | Dashboard: net worth, cycle stats, spending, bills |
+| `components/layout/app-shell.tsx` | Shell: floating sidebar (desktop) + `MobileBottomNav` fixed bottom bar (mobile) |
+| `components/layout/app-sidebar.tsx` | Sidebar: primary nav, account list, net worth, hide-balances toggle, utility nav |
 | `app/transactions/actions.ts` | CRUD + bulk ops (assign category, set tag) |
 | `app/transactions/edit-modal.tsx` | Edit modal: amount, EUR equivalent override (non-EUR), category, tag, transfer counterpart |
 | `app/actions/quick-add.ts` | Quick-add server action: creates tx + cross-currency transfer counterpart via spot rate |
@@ -71,6 +73,10 @@ Schema source: `schema.sql` (idempotent, safe to re-run).
 | `app/categories/[id]/rules/actions.ts` | Category rule CRUD + apply-to-existing |
 | `app/import/page.tsx` | CSV/PDF upload UI; routes file to correct adapter |
 | `app/inbox/actions.ts` | Confirm/dismiss staged Apple Wallet transactions |
+| `app/forecast/page.tsx` | Monthly budget plan: income + fixed rules + installments + category budgets |
+| `app/forecast/ForecastPlan.tsx` | Client component: sections, month nav, free-money total |
+| `app/forecast/RuleModal.tsx` | Add/edit forecast rule modal (income / recurring / installment) |
+| `app/forecast/actions.ts` | `upsertForecastRule`, `deleteForecastRule` server actions |
 | `app/advisor/prompt.ts` | Builds Claude system prompt (accounts, spending, budgets, ledger) |
 | `app/api/advisor/route.ts` | Stream Claude response; ephemeral cache on system prompt |
 | `app/api/ingest/route.ts` | Parse Apple Wallet push text → staged_transaction |
@@ -89,6 +95,13 @@ Upload → adapter normalizes → `lib/db-loader.ts::saveTransactions()`:
 5. Dedup: `(date, amount, description)` key
 6. Bulk insert (500-row chunks)
 7. `revalidatePath()` on dashboard + sidebar
+
+**Monthly Forecast / Budget Plan**
+`/forecast` — planning view for the selected calendar month. Three rule types stored in `forecast_rules`:
+- `income` — positive recurring (salary). Active from start_date onward.
+- `recurring` — fixed monthly cost (rent, subscriptions, loans). Optional end_date.
+- `installment` — time-limited (N months from start_date). Shows `X/Y` badge; auto-expires.
+Variable budgets pulled directly from `categories.monthly_budget` (categories with a budget set are auto-included). Free money = income + fixed + installments + budgets. `forecast_instances` table exists in schema but is unused by this view.
 
 **Transaction CRUD**
 `app/transactions/actions.ts` — `createManualTransaction`, `updateTransaction` (recalculates EUR if amount changes), `deleteTransaction`, `bulkAssignCategory`, `bulkSetTag`. All call `revalidatePath()`.
@@ -141,6 +154,9 @@ Priority order: (1) imported category if non-empty → (2) highest-priority matc
 - **`next.config.ts`** — `output: 'standalone'`; `pdf-parse` + `postgres` marked as server externals; TS build errors ignored
 - **Installment format** — Brazilian "Parcela N/M" parsed at import time, stored as `installment_index` / `installment_total`
 - **Transfer linking** — use `transaction_links` table to pair debit/credit sides; don't duplicate amount
+- **Hide balances** — global toggle lives in the sidebar utility nav (`useHideBalances` context); do NOT add eye buttons to individual page headers
+- **Archived categories** — `is_active = false` categories are hidden by default everywhere (categories page, forecast); categories page has a client-side "archived" toggle button; forecast SQL filters `is_active = true`
+- **Mobile layout** — `app-shell.tsx` renders a fixed bottom nav bar (`MobileBottomNav`) on small screens; sidebar is desktop-only (`hidden md:block`)
 
 ---
 

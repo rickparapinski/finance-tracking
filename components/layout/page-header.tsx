@@ -73,11 +73,11 @@ export function PageHeader({
           <div className="flex items-center gap-2 min-w-0">
             {icon && <div className="shrink-0">{icon}</div>}
             <div className="min-w-0">
-              <h1 className="font-pixel text-xl text-ink leading-none lowercase truncate">
+              <h1 className="font-pixel text-xl text-ink leading-[1.2] lowercase truncate">
                 {title}
               </h1>
               {meta && (
-                <p className="font-mono text-xs text-ink-soft mt-1 leading-none">
+                <p className="font-mono text-xs text-ink-soft mt-1 leading-[1.2]">
                   {meta}
                 </p>
               )}

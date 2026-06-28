@@ -11,10 +11,13 @@ import { ListBox } from "pixelarticons/react/ListBox";
 import { Logout } from "pixelarticons/react/Logout";
 import { Sparkles } from "pixelarticons/react/Sparkles";
 import { ChevronLeft } from "pixelarticons/react/ChevronLeft";
+import { CalendarRange } from "pixelarticons/react/CalendarRange";
 import { logout } from "@/app/login/actions";
 import { useHideBalances } from "@/contexts/hide-balances";
 import { slugify } from "@/lib/slugify";
 import { Nah, type NahExpression } from "@/components/Nah";
+import { Eye } from "pixelarticons/react/Eye";
+import { EyeOff } from "pixelarticons/react/EyeOff";
 
 // --- Types -------------------------------------------------------------------
 
@@ -43,6 +46,7 @@ const NAV_PRIMARY = [
   { label: "transactions", href: "/transactions", Icon: ArrowsHorizontal },
   { label: "categories",   href: "/categories",   Icon: ListBox },
   { label: "accounts",     href: "/accounts",     Icon: Wallet },
+  { label: "forecast",     href: "/forecast",     Icon: CalendarRange },
   { label: "advisor",      href: "/advisor",      Icon: Sparkles },
 ];
 
@@ -92,15 +96,17 @@ function NavItem({
       <Link
         href={href}
         title={collapsed ? label : undefined}
-        className={`flex items-center gap-2.5 pl-3 pr-2 py-1.5 border-l-2 transition-none ${
+        className={`flex items-center gap-2.5 border-l-2 transition-none ${
+          collapsed ? "justify-center px-2 py-2" : "pl-3 pr-2 py-1.5"
+        } ${
           active
             ? "border-lime bg-white/8 text-cream-soft"
             : "border-transparent text-cream-soft/45 hover:border-cream-soft/25 hover:bg-white/5 hover:text-cream-soft/70"
         }`}
       >
-        <Icon className="size-[13px] shrink-0" />
+        <Icon className={`${collapsed ? "size-[18px]" : "size-[13px]"} shrink-0`} />
         {!collapsed && (
-          <span className={`font-pixel text-[11px] flex-1 truncate leading-none ${active ? "translate-x-0.5" : ""}`}>
+          <span className={`font-pixel text-[11px] flex-1 truncate leading-[1.5] ${active ? "translate-x-0.5" : ""}`}>
             {label}
           </span>
         )}
@@ -120,7 +126,7 @@ export function AppSidebar({
   footerReaction = "we're working on it.",
 }: AppSidebarProps) {
   const pathname  = usePathname();
-  const { hidden } = useHideBalances();
+  const { hidden, toggle } = useHideBalances();
   const groups    = groupAccounts(accounts);
   const { expression, microcopy } = nahState(daysSinceLastLog);
 
@@ -168,7 +174,7 @@ export function AppSidebar({
       )}
 
       {/* Scrollable content */}
-      <nav className="flex flex-col flex-1 overflow-y-auto pt-2 pb-1">
+      <nav className="flex flex-col flex-1 overflow-y-auto scrollbar-hide pt-2 pb-1">
 
         {/* Primary nav */}
         <ul className="space-y-px">
@@ -237,6 +243,30 @@ export function AppSidebar({
 
         {/* Utility nav — sits above the lock, visually muted */}
         <div className="mt-auto pt-2 border-t border-white/8">
+          {/* Hide balances toggle */}
+          <div className="mb-px">
+            <button
+              onClick={toggle}
+              title={collapsed ? (hidden ? "Show balances" : "Hide balances") : undefined}
+              className={`flex items-center gap-2.5 w-full border-l-2 cursor-pointer transition-none ${
+                collapsed ? "justify-center px-2 py-2" : "pl-3 pr-2 py-1.5"
+              } ${
+                hidden
+                  ? "border-lime bg-white/8 text-cream-soft"
+                  : "border-transparent text-cream-soft/45 hover:border-cream-soft/25 hover:bg-white/5 hover:text-cream-soft/70"
+              }`}
+            >
+              {hidden
+                ? <EyeOff className={`${collapsed ? "size-[18px]" : "size-[13px]"} shrink-0`} />
+                : <Eye    className={`${collapsed ? "size-[18px]" : "size-[13px]"} shrink-0`} />
+              }
+              {!collapsed && (
+                <span className="font-pixel text-[11px] leading-[1.5]">
+                  {hidden ? "show balances" : "hide balances"}
+                </span>
+              )}
+            </button>
+          </div>
           <ul className="space-y-px">
             {NAV_UTILITY.map(({ label, href, Icon }) => (
               <NavItem key={href} label={label} href={href} Icon={Icon} active={pathname === href} collapsed={collapsed} />
@@ -249,11 +279,13 @@ export function AppSidebar({
               <button
                 type="submit"
                 title={collapsed ? "Lock" : undefined}
-                className="flex items-center gap-2.5 pl-3 pr-2 py-1.5 w-full border-l-2 border-transparent text-cream-soft/30 hover:border-cream-soft/20 hover:bg-white/5 hover:text-cream-soft/55 cursor-pointer transition-none"
+                className={`flex items-center gap-2.5 w-full border-l-2 border-transparent text-cream-soft/30 hover:border-cream-soft/20 hover:bg-white/5 hover:text-cream-soft/55 cursor-pointer transition-none ${
+                  collapsed ? "justify-center px-2 py-2" : "pl-3 pr-2 py-1.5"
+                }`}
               >
-                <Logout className="size-[13px] shrink-0" />
+                <Logout className={`${collapsed ? "size-[18px]" : "size-[13px]"} shrink-0`} />
                 {!collapsed && (
-                  <span className="font-pixel text-[11px] leading-none">lock</span>
+                  <span className="font-pixel text-[11px] leading-[1.5]">lock</span>
                 )}
               </button>
             </form>

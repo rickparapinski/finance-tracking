@@ -37,6 +37,9 @@ export function CategoriesClientPage({
   const [spendingMap, setSpendingMap] = useState(initialSpending);
   const [selectedKey, setSelectedKey] = useState(currentCycleKey);
   const [isPending, startTransition]  = useTransition();
+  const [showArchived, setShowArchived] = useState(false);
+
+  const hasArchived = categories.some((c) => !c.is_active);
 
   const handlePeriodChange = (period: Period) => {
     setSelectedKey(period.key);
@@ -65,8 +68,29 @@ export function CategoriesClientPage({
     return pctB - pctA;
   };
 
-  const income  = categories.filter((c) => c.type === "income").sort(sortByPct);
-  const expense = categories.filter((c) => c.type === "expense").sort(sortByPct);
+  const sortExpense = (a: Category, b: Category) => {
+    const budA = Number(a.monthly_budget ?? 0);
+    const budB = Number(b.monthly_budget ?? 0);
+    const spentA = Math.abs(spendingMap[a.name] ?? 0);
+    const spentB = Math.abs(spendingMap[b.name] ?? 0);
+    const fullA = budA > 0 && spentA >= budA;
+    const fullB = budB > 0 && spentB >= budB;
+    // 1. at/over budget first
+    if (fullA !== fullB) return fullA ? -1 : 1;
+    // 2. no budget last
+    if (!budA && budB) return 1;
+    if (budA && !budB) return -1;
+    // 3. then by % descending
+    const pctA = budA > 0 ? spentA / budA : 0;
+    const pctB = budB > 0 ? spentB / budB : 0;
+    if (pctA !== pctB) return pctB - pctA;
+    // 4. alpha tiebreaker
+    return a.name.localeCompare(b.name);
+  };
+
+  const visible = (c: Category) => showArchived || c.is_active;
+  const income  = categories.filter((c) => c.type === "income"  && visible(c)).sort(sortByPct);
+  const expense = categories.filter((c) => c.type === "expense" && visible(c)).sort(sortExpense);
 
   return (
     <div className="space-y-6">
@@ -82,6 +106,18 @@ export function CategoriesClientPage({
         meta="budgets & spending by cycle"
         action={
           <div className="flex items-center gap-2">
+            {hasArchived && (
+              <button
+                onClick={() => setShowArchived((v) => !v)}
+                className={`h-8 px-3 flex items-center gap-1 border-2 font-pixel text-[11px] shadow-[2px_2px_0_rgba(31,31,31,0.2)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-[1px_1px_0_rgba(31,31,31,0.2)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-none ${
+                  showArchived
+                    ? "bg-ink border-ink text-cream-soft"
+                    : "bg-surface border-ink/20 text-ink-soft hover:border-ink/40 hover:text-ink"
+                }`}
+              >
+                {showArchived ? "hide archived" : "archived"}
+              </button>
+            )}
             {/* Cycle switcher — secondary, never lime (lime = "+ new" only) */}
             <CycleSwitcher
               periods={periods}

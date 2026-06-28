@@ -1,6 +1,6 @@
 "use client";
 
-import { Bell, Eye, EyeOff } from "lucide-react";
+import { Bell } from "lucide-react";
 import Link from "next/link";
 import { Nah, type NahExpression } from "@/components/Nah";
 import { useHideBalances } from "@/contexts/hide-balances";
@@ -400,7 +400,7 @@ function AssetDebtCard({ assets, liabilities, netWorth, hidden }: {
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export function DashboardClient({ data }: { data: DashboardData }) {
-  const { hidden, toggle } = useHideBalances();
+  const { hidden } = useHideBalances();
 
   const {
     cycleStart, cycleEnd, daysLeft, daysTotal,
@@ -440,13 +440,6 @@ export function DashboardClient({ data }: { data: DashboardData }) {
             <Segs filled={cycleFilled} />
           </div>
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={toggle}
-              className="w-8 h-8 grid place-items-center rounded-sm text-ink-soft border-2 border-ink/15 bg-surface hover:bg-lime hover:border-lime hover:text-ink shadow-[1px_1px_0_rgba(31,31,31,0.1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px] cursor-pointer transition-none"
-              title={hidden ? "Show balances" : "Hide balances"}
-            >
-              {hidden ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
             <Link
               href="/inbox"
               className="relative w-8 h-8 grid place-items-center rounded-sm text-ink-soft border-2 border-ink/15 bg-surface hover:bg-lime hover:border-lime hover:text-ink shadow-[1px_1px_0_rgba(31,31,31,0.1)] hover:shadow-none hover:translate-x-[1px] hover:translate-y-[1px] active:translate-x-[2px] active:translate-y-[2px] cursor-pointer transition-none"
